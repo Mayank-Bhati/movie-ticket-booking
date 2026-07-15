@@ -4,11 +4,13 @@ import com.moviebooking.booking.BookingDtos.BookingRequest;
 import com.moviebooking.booking.BookingDtos.BookingResponse;
 import com.moviebooking.booking.BookingDtos.HoldRequest;
 import com.moviebooking.booking.BookingDtos.HoldResponse;
+import com.moviebooking.refund.RefundDtos.CancellationResponse;
 import com.moviebooking.security.AppUserPrincipal;
 import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -54,5 +56,12 @@ public class BookingController {
     public BookingResponse getBooking(@AuthenticationPrincipal AppUserPrincipal user,
                                       @PathVariable Long id) {
         return bookingService.getBooking(user.getId(), id);
+    }
+
+    /** Cancels a confirmed booking and returns the refund computed from the refund policy. */
+    @DeleteMapping("/api/bookings/{id}")
+    public CancellationResponse cancelBooking(@AuthenticationPrincipal AppUserPrincipal user,
+                                              @PathVariable Long id) {
+        return bookingService.cancelBooking(user.getId(), id);
     }
 }

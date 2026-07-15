@@ -7,16 +7,21 @@ import com.moviebooking.booking.PaymentGateway.PaymentResult;
 import com.moviebooking.entity.Booking;
 import com.moviebooking.entity.BookingSeat;
 import com.moviebooking.entity.Payment;
+import com.moviebooking.entity.Refund;
 import com.moviebooking.entity.SeatHold;
 import com.moviebooking.entity.ShowSeat;
 import com.moviebooking.pricing.DiscountService;
 import com.moviebooking.pricing.DiscountService.DiscountResult;
+import com.moviebooking.refund.RefundDtos.CancellationResponse;
+import com.moviebooking.refund.RefundPolicyService;
 import com.moviebooking.repository.BookingRepository;
 import com.moviebooking.repository.PaymentRepository;
+import com.moviebooking.repository.RefundRepository;
 import com.moviebooking.repository.SeatHoldRepository;
 import com.moviebooking.repository.ShowSeatRepository;
 import com.moviebooking.web.ApiException;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -30,17 +35,22 @@ public class BookingService {
     private final ShowSeatRepository showSeatRepository;
     private final BookingRepository bookingRepository;
     private final PaymentRepository paymentRepository;
+    private final RefundRepository refundRepository;
     private final DiscountService discountService;
+    private final RefundPolicyService refundPolicyService;
     private final PaymentGateway paymentGateway;
 
     public BookingService(SeatHoldRepository seatHoldRepository, ShowSeatRepository showSeatRepository,
                           BookingRepository bookingRepository, PaymentRepository paymentRepository,
-                          DiscountService discountService, PaymentGateway paymentGateway) {
+                          RefundRepository refundRepository, DiscountService discountService,
+                          RefundPolicyService refundPolicyService, PaymentGateway paymentGateway) {
         this.seatHoldRepository = seatHoldRepository;
         this.showSeatRepository = showSeatRepository;
         this.bookingRepository = bookingRepository;
         this.paymentRepository = paymentRepository;
+        this.refundRepository = refundRepository;
         this.discountService = discountService;
+        this.refundPolicyService = refundPolicyService;
         this.paymentGateway = paymentGateway;
     }
 
@@ -91,6 +101,45 @@ public class BookingService {
             throw ApiException.forbidden("Booking does not belong to the current user");
         }
         return toResponse(booking, null);
+    }
+
+    /**
+     * Cancels a confirmed booking: releases the seats back to AVAILABLE and records a refund
+     * computed from the configurable refund policy based on how far ahead of the show it is.
+     */
+    @Transactional
+    public CancellationResponse cancelBooking(Long userId, Long bookingId) {
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> ApiException.notFound("Booking not found: " + bookingId));
+        if (!booking.getUser().getId().equals(userId)) {
+            throw ApiException.forbidden("Booking does not belong to the current user");
+        }
+        if (booking.getStatus() != Booking.Status.CONFIRMED) {
+            throw ApiException.conflict("Only confirmed bookings can be cancelled");
+        }
+
+        int refundPercent = refundPolicyService.refundPercentFor(
+                LocalDateTime.now(), booking.getShow().getStartsAt());
+        BigDecimal refundAmount = booking.getTotalAmount()
+                .multiply(BigDecimal.valueOf(refundPercent))
+                .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+
+        for (BookingSeat bookingSeat : booking.getSeats()) {
+            ShowSeat seat = bookingSeat.getShowSeat();
+            seat.setStatus(ShowSeat.Status.AVAILABLE);
+            seat.setHold(null);
+        }
+        booking.setStatus(Booking.Status.CANCELLED);
+        booking.setCancelledAt(LocalDateTime.now());
+
+        Refund refund = new Refund();
+        refund.setBooking(booking);
+        refund.setAmount(refundAmount);
+        refund.setRefundPercent(refundPercent);
+        refundRepository.save(refund);
+
+        return new CancellationResponse(booking.getBookingRef(), booking.getStatus().name(),
+                refundPercent, refundAmount);
     }
 
     // ----- confirmBooking steps -----
