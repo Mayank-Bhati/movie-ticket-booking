@@ -28,5 +28,9 @@ public class Seat {
     @Column(nullable = false, length = 20)
     private SeatType seatType;
 
+    public String label() {
+        return rowLabel + seatNumber;
+    }
+
     public enum SeatType { REGULAR, PREMIUM }
 }

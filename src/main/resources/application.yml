@@ -17,6 +17,7 @@ app:
     expiration-minutes: ${APP_JWT_EXPIRATION_MINUTES:120}
   hold:
     ttl-minutes: ${APP_HOLD_TTL_MINUTES:5}
+    sweep-interval-ms: ${APP_HOLD_SWEEP_INTERVAL_MS:30000}
   admin:
     email: ${APP_ADMIN_EMAIL:admin@moviebooking.com}
     password: ${APP_ADMIN_PASSWORD:admin123}

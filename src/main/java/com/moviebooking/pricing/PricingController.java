@@ -33,16 +33,19 @@ public class PricingController {
     }
 
     // ----- Pricing tiers (admin) -----
+    /** Lists the pricing multipliers (regular/premium seat, weekend). */
     @GetMapping("/api/admin/pricing-tiers")
     public List<PricingTierResponse> listTiers() {
         return pricingTierService.list();
     }
 
+    /** Creates or updates a pricing multiplier (upsert by code). */
     @PutMapping("/api/admin/pricing-tiers")
     public PricingTierResponse saveTier(@Valid @RequestBody PricingTierRequest request) {
         return pricingTierService.save(request);
     }
 
+    /** Deletes a pricing tier by id. */
     @DeleteMapping("/api/admin/pricing-tiers/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void deleteTier(@PathVariable Long id) {
@@ -50,22 +53,26 @@ public class PricingController {
     }
 
     // ----- Discount codes (admin) -----
+    /** Lists all discount codes. */
     @GetMapping("/api/admin/discount-codes")
     public List<DiscountCodeResponse> listCodes() {
         return discountService.list();
     }
 
+    /** Creates a discount code (percent or flat, with optional min amount, usage cap, validity window). */
     @PostMapping("/api/admin/discount-codes")
     @ResponseStatus(HttpStatus.CREATED)
     public DiscountCodeResponse createCode(@Valid @RequestBody DiscountCodeRequest request) {
         return discountService.create(request);
     }
 
+    /** Updates an existing discount code. */
     @PutMapping("/api/admin/discount-codes/{id}")
     public DiscountCodeResponse updateCode(@PathVariable Long id, @Valid @RequestBody DiscountCodeRequest request) {
         return discountService.update(id, request);
     }
 
+    /** Deletes a discount code by id. */
     @DeleteMapping("/api/admin/discount-codes/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void deleteCode(@PathVariable Long id) {
@@ -76,6 +83,7 @@ public class PricingController {
     public record PreviewRequest(@NotBlank String code, @NotNull @Positive BigDecimal subtotal) {
     }
 
+    /** Previews the discount and final total for a code against a subtotal, without booking. */
     @PostMapping("/api/discounts/preview")
     public DiscountPreviewResponse preview(@Valid @RequestBody PreviewRequest request) {
         return discountService.preview(request.code(), request.subtotal());

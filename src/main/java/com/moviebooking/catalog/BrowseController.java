@@ -22,32 +22,38 @@ public class BrowseController {
         this.showService = showService;
     }
 
+    /** Lists all cities. */
     @GetMapping("/api/cities")
     public List<CityResponse> cities() {
         return catalogService.listCities();
     }
 
+    /** Lists all movies. */
     @GetMapping("/api/movies")
     public List<MovieResponse> movies() {
         return catalogService.listMovies();
     }
 
+    /** Returns a single movie. */
     @GetMapping("/api/movies/{id}")
     public MovieResponse movie(@PathVariable Long id) {
         return catalogService.getMovie(id);
     }
 
+    /** Lists shows for a movie, optionally filtered to a city. */
     @GetMapping("/api/movies/{id}/shows")
     public List<ShowResponse> showsForMovie(@PathVariable Long id,
                                             @RequestParam(required = false) Long cityId) {
         return showService.listShowsForMovie(id, cityId);
     }
 
+    /** Returns show details. */
     @GetMapping("/api/shows/{id}")
     public ShowResponse show(@PathVariable Long id) {
         return showService.getShow(id);
     }
 
+    /** Returns the live seat map for a show: each seat's status (available/held/booked) and price. */
     @GetMapping("/api/shows/{id}/seats")
     public List<ShowSeatResponse> seatMap(@PathVariable Long id) {
         return showService.seatMap(id);

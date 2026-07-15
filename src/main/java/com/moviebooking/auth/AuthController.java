@@ -21,12 +21,14 @@ public class AuthController {
         this.authService = authService;
     }
 
+    /** Registers a new customer account and returns a JWT for immediate use. */
     @PostMapping("/register")
     @ResponseStatus(HttpStatus.CREATED)
     public AuthResponse register(@Valid @RequestBody RegisterRequest request) {
         return authService.register(request);
     }
 
+    /** Authenticates by email/password and returns a JWT carrying the user's role. */
     @PostMapping("/login")
     public AuthResponse login(@Valid @RequestBody LoginRequest request) {
         return authService.login(request);

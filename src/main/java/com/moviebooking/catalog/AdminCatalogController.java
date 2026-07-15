@@ -37,12 +37,14 @@ public class AdminCatalogController {
     }
 
     // ----- Cities -----
+    /** Creates a city. */
     @PostMapping("/cities")
     @ResponseStatus(HttpStatus.CREATED)
     public CityResponse createCity(@Valid @RequestBody CityRequest request) {
         return catalogService.createCity(request);
     }
 
+    /** Deletes a city by id. */
     @DeleteMapping("/cities/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void deleteCity(@PathVariable Long id) {
@@ -50,46 +52,54 @@ public class AdminCatalogController {
     }
 
     // ----- Theaters -----
+    /** Creates a theater within a city. */
     @PostMapping("/theaters")
     @ResponseStatus(HttpStatus.CREATED)
     public TheaterResponse createTheater(@Valid @RequestBody TheaterRequest request) {
         return catalogService.createTheater(request);
     }
 
+    /** Lists theaters, optionally filtered by city. */
     @GetMapping("/theaters")
     public List<TheaterResponse> listTheaters(@RequestParam(required = false) Long cityId) {
         return catalogService.listTheaters(cityId);
     }
 
     // ----- Screens -----
+    /** Creates a screen and generates its seat layout from the row specs. */
     @PostMapping("/screens")
     @ResponseStatus(HttpStatus.CREATED)
     public ScreenResponse createScreen(@Valid @RequestBody ScreenRequest request) {
         return catalogService.createScreen(request);
     }
 
+    /** Lists screens, optionally filtered by theater. */
     @GetMapping("/screens")
     public List<ScreenResponse> listScreens(@RequestParam(required = false) Long theaterId) {
         return catalogService.listScreens(theaterId);
     }
 
+    /** Returns a screen with its full seat layout. */
     @GetMapping("/screens/{id}")
     public ScreenResponse getScreen(@PathVariable Long id) {
         return catalogService.getScreen(id);
     }
 
     // ----- Movies -----
+    /** Creates a movie. */
     @PostMapping("/movies")
     @ResponseStatus(HttpStatus.CREATED)
     public MovieResponse createMovie(@Valid @RequestBody MovieRequest request) {
         return catalogService.createMovie(request);
     }
 
+    /** Updates an existing movie. */
     @PutMapping("/movies/{id}")
     public MovieResponse updateMovie(@PathVariable Long id, @Valid @RequestBody MovieRequest request) {
         return catalogService.updateMovie(id, request);
     }
 
+    /** Deletes a movie by id. */
     @DeleteMapping("/movies/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void deleteMovie(@PathVariable Long id) {
@@ -97,6 +107,7 @@ public class AdminCatalogController {
     }
 
     // ----- Shows -----
+    /** Creates a show and materializes a priced, bookable seat for every seat in the screen. */
     @PostMapping("/shows")
     @ResponseStatus(HttpStatus.CREATED)
     public ShowResponse createShow(@Valid @RequestBody ShowRequest request) {
