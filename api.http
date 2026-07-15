@@ -1,0 +1,97 @@
+### Movie Ticket Booking — runnable API walkthrough
+### Open in IntelliJ (or VS Code REST Client) and run the requests top to bottom.
+### Start the app first:  ./mvnw spring-boot:run -Dspring-boot.run.profiles=demo
+
+@host = http://localhost:8080
+
+### 1. Log in as the seeded admin (captures the admin token)
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "email": "admin@moviebooking.com", "password": "admin123" }
+
+> {% client.global.set("adminToken", response.body.token); %}
+
+### 2. Register a customer (captures the customer token)
+POST {{host}}/api/auth/register
+Content-Type: application/json
+
+{ "email": "customer@example.com", "password": "secret123", "fullName": "Test Customer" }
+
+> {% client.global.set("customerToken", response.body.token); %}
+
+### 3. Browse movies (public)
+GET {{host}}/api/movies
+
+### 4. Shows for movie 1 (public)
+GET {{host}}/api/movies/1/shows
+
+### 5. Seat map for show 1 (public) — pick showSeatIds from the response
+GET {{host}}/api/shows/1/seats
+
+### 6. Hold seats 1 and 2 for show 1 (captures the hold id)
+POST {{host}}/api/holds
+Content-Type: application/json
+Authorization: Bearer {{customerToken}}
+
+{ "showId": 1, "showSeatIds": [1, 2] }
+
+> {% client.global.set("holdId", response.body.holdId); %}
+
+### 7. Confirm the booking (captures the booking id)
+POST {{host}}/api/bookings
+Content-Type: application/json
+Authorization: Bearer {{customerToken}}
+
+{ "holdId": {{holdId}} }
+
+> {% client.global.set("bookingId", response.body.id); %}
+
+### 8. Booking history
+GET {{host}}/api/bookings
+Authorization: Bearer {{customerToken}}
+
+### 9. Notifications (confirmation appears here)
+GET {{host}}/api/notifications
+Authorization: Bearer {{customerToken}}
+
+### 10. Cancel the booking (refund per policy)
+DELETE {{host}}/api/bookings/{{bookingId}}
+Authorization: Bearer {{customerToken}}
+
+### --- Admin examples ---
+
+### Create a city
+POST {{host}}/api/admin/cities
+Content-Type: application/json
+Authorization: Bearer {{adminToken}}
+
+{ "name": "Mumbai" }
+
+### Create a discount code
+POST {{host}}/api/admin/discount-codes
+Content-Type: application/json
+Authorization: Bearer {{adminToken}}
+
+{ "code": "SAVE10", "type": "PERCENT", "amount": 10, "minAmount": 100, "maxUses": 100 }
+
+### Preview a discount (any logged-in user)
+POST {{host}}/api/discounts/preview
+Content-Type: application/json
+Authorization: Bearer {{customerToken}}
+
+{ "code": "SAVE10", "subtotal": 1000 }
+
+### Change the premium seat multiplier
+PUT {{host}}/api/admin/pricing-tiers
+Content-Type: application/json
+Authorization: Bearer {{adminToken}}
+
+{ "code": "SEAT_PREMIUM", "description": "Premium seat", "multiplier": 1.75 }
+
+### Change a refund tier
+PUT {{host}}/api/admin/refund-policies
+Content-Type: application/json
+Authorization: Bearer {{adminToken}}
+
+{ "minHoursBeforeShow": 2, "refundPercent": 60 }
