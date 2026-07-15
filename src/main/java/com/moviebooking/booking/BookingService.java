@@ -227,7 +227,7 @@ public class BookingService {
         List<HeldSeat> seats = booking.getSeats().stream()
                 .map(bs -> new HeldSeat(bs.getShowSeat().getId(), bs.getShowSeat().getSeat().label(), bs.getPrice()))
                 .toList();
-        return new BookingResponse(booking.getBookingRef(), booking.getShow().getId(),
+        return new BookingResponse(booking.getId(), booking.getBookingRef(), booking.getShow().getId(),
                 booking.getShow().getMovie().getTitle(), booking.getStatus().name(), seats,
                 booking.getSubtotal(), booking.getDiscountAmount(), booking.getTotalAmount(),
                 paymentStatus, booking.getCreatedAt());

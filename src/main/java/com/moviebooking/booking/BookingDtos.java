@@ -28,7 +28,7 @@ public class BookingDtos {
             String discountCode) {
     }
 
-    public record BookingResponse(String bookingRef, Long showId, String movieTitle, String status,
+    public record BookingResponse(Long id, String bookingRef, Long showId, String movieTitle, String status,
                                   List<HeldSeat> seats, BigDecimal subtotal, BigDecimal discountAmount,
                                   BigDecimal totalAmount, String paymentStatus, LocalDateTime createdAt) {
     }
