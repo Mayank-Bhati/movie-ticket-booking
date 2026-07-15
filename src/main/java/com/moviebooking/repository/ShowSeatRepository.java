@@ -12,6 +12,10 @@ public interface ShowSeatRepository extends JpaRepository<ShowSeat, Long> {
 
     List<ShowSeat> findByShowIdOrderByIdAsc(Long showId);
 
+    /** Loads a show's seats with the seat joined, avoiding N+1 selects when rendering the seat map. */
+    @Query("SELECT ss FROM ShowSeat ss JOIN FETCH ss.seat WHERE ss.show.id = :showId ORDER BY ss.id ASC")
+    List<ShowSeat> findSeatMapByShowId(@Param("showId") Long showId);
+
     /**
      * Locks the requested show seats FOR UPDATE, ordered by id to avoid deadlocks.
      * This is the serialization point that prevents double-allocation.

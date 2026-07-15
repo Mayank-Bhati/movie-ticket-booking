@@ -27,13 +27,24 @@ public class DiscountService {
     }
 
     /**
-     * Validates a discount code against the subtotal and computes the discount amount.
-     * Does not persist usage — the caller increments usedCount within its own transaction.
+     * Validates a discount code against the subtotal and computes the discount amount, for preview
+     * only. Reads without a lock — no usage is recorded.
      */
     public DiscountResult apply(String code, BigDecimal subtotal) {
-        DiscountCode discount = discountCodeRepository.findByCodeIgnoreCase(code)
-                .orElseThrow(() -> ApiException.badRequest("Unknown discount code: " + code));
+        return evaluate(discountCodeRepository.findByCodeIgnoreCase(code)
+                .orElseThrow(() -> ApiException.badRequest("Unknown discount code: " + code)), subtotal);
+    }
 
+    /**
+     * Same validation as {@link #apply}, but locks the code row FOR UPDATE so the caller can
+     * increment usedCount without racing other bookings redeeming the same limited code.
+     */
+    public DiscountResult applyForBooking(String code, BigDecimal subtotal) {
+        return evaluate(discountCodeRepository.lockByCode(code)
+                .orElseThrow(() -> ApiException.badRequest("Unknown discount code: " + code)), subtotal);
+    }
+
+    private DiscountResult evaluate(DiscountCode discount, BigDecimal subtotal) {
         if (!discount.getActive()) {
             throw ApiException.badRequest("Discount code is inactive");
         }

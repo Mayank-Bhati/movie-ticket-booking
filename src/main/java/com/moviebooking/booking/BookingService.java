@@ -176,7 +176,7 @@ public class BookingService {
     }
 
     private DiscountResult resolveDiscount(String code, BigDecimal subtotal) {
-        return (code == null || code.isBlank()) ? null : discountService.apply(code, subtotal);
+        return (code == null || code.isBlank()) ? null : discountService.applyForBooking(code, subtotal);
     }
 
     private Booking buildBooking(SeatHold hold, List<ShowSeat> seats,

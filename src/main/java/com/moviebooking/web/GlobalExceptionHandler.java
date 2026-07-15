@@ -8,11 +8,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -37,6 +39,11 @@ public class GlobalExceptionHandler {
                         fe -> fe.getDefaultMessage() == null ? "invalid" : fe.getDefaultMessage(),
                         (a, b) -> a));
         return build(HttpStatus.BAD_REQUEST, "Validation failed", fieldErrors);
+    }
+
+    @ExceptionHandler({HttpMessageNotReadableException.class, MethodArgumentTypeMismatchException.class})
+    public ResponseEntity<Map<String, Object>> handleMalformedRequest(Exception ex) {
+        return build(HttpStatus.BAD_REQUEST, "Malformed request", null);
     }
 
     @ExceptionHandler(Exception.class)

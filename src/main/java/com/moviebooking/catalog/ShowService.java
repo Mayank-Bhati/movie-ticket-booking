@@ -98,7 +98,7 @@ public class ShowService {
         if (!showRepository.existsById(showId)) {
             throw ApiException.notFound("Show not found: " + showId);
         }
-        return showSeatRepository.findByShowIdOrderByIdAsc(showId).stream()
+        return showSeatRepository.findSeatMapByShowId(showId).stream()
                 .map(ss -> {
                     Seat seat = ss.getSeat();
                     return new ShowSeatResponse(ss.getId(), seat.getRowLabel(), seat.getSeatNumber(),
