@@ -10,6 +10,7 @@ import com.moviebooking.entity.Payment;
 import com.moviebooking.entity.Refund;
 import com.moviebooking.entity.SeatHold;
 import com.moviebooking.entity.ShowSeat;
+import com.moviebooking.notification.NotificationService;
 import com.moviebooking.pricing.DiscountService;
 import com.moviebooking.pricing.DiscountService.DiscountResult;
 import com.moviebooking.refund.RefundDtos.CancellationResponse;
@@ -39,11 +40,13 @@ public class BookingService {
     private final DiscountService discountService;
     private final RefundPolicyService refundPolicyService;
     private final PaymentGateway paymentGateway;
+    private final NotificationService notificationService;
 
     public BookingService(SeatHoldRepository seatHoldRepository, ShowSeatRepository showSeatRepository,
                           BookingRepository bookingRepository, PaymentRepository paymentRepository,
                           RefundRepository refundRepository, DiscountService discountService,
-                          RefundPolicyService refundPolicyService, PaymentGateway paymentGateway) {
+                          RefundPolicyService refundPolicyService, PaymentGateway paymentGateway,
+                          NotificationService notificationService) {
         this.seatHoldRepository = seatHoldRepository;
         this.showSeatRepository = showSeatRepository;
         this.bookingRepository = bookingRepository;
@@ -52,6 +55,7 @@ public class BookingService {
         this.discountService = discountService;
         this.refundPolicyService = refundPolicyService;
         this.paymentGateway = paymentGateway;
+        this.notificationService = notificationService;
     }
 
     /**
@@ -81,6 +85,7 @@ public class BookingService {
         if (discount != null) {
             discount.code().setUsedCount(discount.code().getUsedCount() + 1);
         }
+        notificationService.recordBookingConfirmed(booking);
         return toResponse(booking, payment.getStatus().name());
     }
 
@@ -138,6 +143,7 @@ public class BookingService {
         refund.setRefundPercent(refundPercent);
         refundRepository.save(refund);
 
+        notificationService.recordBookingCancelled(booking, refundAmount);
         return new CancellationResponse(booking.getBookingRef(), booking.getStatus().name(),
                 refundPercent, refundAmount);
     }

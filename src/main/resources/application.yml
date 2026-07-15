@@ -18,6 +18,10 @@ app:
   hold:
     ttl-minutes: ${APP_HOLD_TTL_MINUTES:5}
     sweep-interval-ms: ${APP_HOLD_SWEEP_INTERVAL_MS:30000}
+  notification:
+    dispatch-interval-ms: ${APP_NOTIFICATION_DISPATCH_INTERVAL_MS:5000}
+    reminder-interval-ms: ${APP_NOTIFICATION_REMINDER_INTERVAL_MS:3600000}
+    reminder-window-hours: ${APP_NOTIFICATION_REMINDER_WINDOW_HOURS:24}
   admin:
     email: ${APP_ADMIN_EMAIL:admin@moviebooking.com}
     password: ${APP_ADMIN_PASSWORD:admin123}
