@@ -8,3 +8,13 @@ spring:
     hibernate:
       ddl-auto: validate
     open-in-view: false
+
+app:
+  jwt:
+    secret: c2VjcmV0LWtleS1mb3ItbW92aWUtdGlja2V0LWJvb2tpbmctZGVtby1vbmx5LTEyMzQ1Ng==
+    expiration-minutes: 120
+  hold:
+    ttl-minutes: 5
+  admin:
+    email: admin@moviebooking.com
+    password: admin123

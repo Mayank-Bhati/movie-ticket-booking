@@ -9,3 +9,14 @@ spring:
     hibernate:
       ddl-auto: validate
     open-in-view: false
+
+app:
+  jwt:
+    # Base64-encoded 256-bit secret. Override in real deployments via APP_JWT_SECRET.
+    secret: ${APP_JWT_SECRET:c2VjcmV0LWtleS1mb3ItbW92aWUtdGlja2V0LWJvb2tpbmctZGVtby1vbmx5LTEyMzQ1Ng==}
+    expiration-minutes: ${APP_JWT_EXPIRATION_MINUTES:120}
+  hold:
+    ttl-minutes: ${APP_HOLD_TTL_MINUTES:5}
+  admin:
+    email: ${APP_ADMIN_EMAIL:admin@moviebooking.com}
+    password: ${APP_ADMIN_PASSWORD:admin123}
