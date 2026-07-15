@@ -7,7 +7,7 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
-/** Wraps our User entity so the authenticated principal carries the user id and role. */
+/** Wraps the User entity so the authenticated principal carries the user id and role. */
 public class AppUserPrincipal implements UserDetails {
 
     private final Long id;
