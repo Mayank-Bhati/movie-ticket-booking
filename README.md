@@ -113,7 +113,11 @@ Authentication is stateless JWT. Send the token as `Authorization: Bearer <token
 | GET / POST / PUT / DELETE | `/api/admin/discount-codes` | Manage discount codes |
 | GET / PUT / DELETE | `/api/admin/refund-policies` | Manage refund policy tiers |
 
-A runnable request collection is in [`api.http`](api.http) (open in IntelliJ and click each request).
+Two runnable request collections are included:
+- [`postman_collection.json`](postman_collection.json) — import into Postman and send the requests
+  top to bottom (tokens and ids are captured automatically). [`DEMO.md`](DEMO.md) is the matching
+  step-by-step walkthrough.
+- [`api.http`](api.http) — the same flow for IntelliJ's built-in HTTP client.
 
 ---
 

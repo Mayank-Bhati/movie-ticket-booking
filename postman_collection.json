@@ -1,0 +1,410 @@
+{
+	"info": {
+		"name": "Movie Ticket Booking API",
+		"description": "Step-by-step demo of the Movie Ticket Booking System. Start the app with:  ./mvnw spring-boot:run -Dspring-boot.run.profiles=demo  then run these requests top to bottom. Tokens and ids are captured automatically into collection variables.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{ "key": "baseUrl", "value": "http://localhost:8080" },
+		{ "key": "adminToken", "value": "" },
+		{ "key": "customerToken", "value": "" },
+		{ "key": "holdId", "value": "" },
+		{ "key": "bookingId", "value": "" }
+	],
+	"item": [
+		{
+			"name": "1 - Login & Setup",
+			"item": [
+				{
+					"name": "1.1 Admin login",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.collectionVariables.set('adminToken', pm.response.json().token);"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [{ "key": "Content-Type", "value": "application/json" }],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"admin@moviebooking.com\",\n  \"password\": \"admin123\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/auth/login",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "auth", "login"]
+						}
+					}
+				},
+				{
+					"name": "1.2 Register customer",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"if (pm.response.code === 201) { pm.collectionVariables.set('customerToken', pm.response.json().token); }"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [{ "key": "Content-Type", "value": "application/json" }],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"customer@example.com\",\n  \"password\": \"secret123\",\n  \"fullName\": \"Demo Customer\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/auth/register",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "auth", "register"]
+						}
+					}
+				},
+				{
+					"name": "1.3 Customer login (if already registered)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.collectionVariables.set('customerToken', pm.response.json().token);"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [{ "key": "Content-Type", "value": "application/json" }],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"customer@example.com\",\n  \"password\": \"secret123\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/auth/login",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "auth", "login"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "2 - Browse (public, no token needed)",
+			"item": [
+				{
+					"name": "2.1 List cities",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{baseUrl}}/api/cities",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "cities"]
+						}
+					}
+				},
+				{
+					"name": "2.2 List movies",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{baseUrl}}/api/movies",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "movies"]
+						}
+					}
+				},
+				{
+					"name": "2.3 Shows for movie 1",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{baseUrl}}/api/movies/1/shows",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "movies", "1", "shows"]
+						}
+					}
+				},
+				{
+					"name": "2.4 Seat map for show 1",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{baseUrl}}/api/shows/1/seats",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "shows", "1", "seats"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "3 - Hold, Book, Cancel",
+			"item": [
+				{
+					"name": "3.1 Hold seats 1 and 2",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.collectionVariables.set('holdId', pm.response.json().holdId);"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{customerToken}}" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"showId\": 1,\n  \"showSeatIds\": [1, 2]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/holds",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "holds"]
+						}
+					}
+				},
+				{
+					"name": "3.2 Confirm booking from the hold",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.collectionVariables.set('bookingId', pm.response.json().id);"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{customerToken}}" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"holdId\": {{holdId}}\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/bookings",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "bookings"]
+						}
+					}
+				},
+				{
+					"name": "3.3 Booking history",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer {{customerToken}}" }],
+						"url": {
+							"raw": "{{baseUrl}}/api/bookings",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "bookings"]
+						}
+					}
+				},
+				{
+					"name": "3.4 My notifications",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer {{customerToken}}" }],
+						"url": {
+							"raw": "{{baseUrl}}/api/notifications",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "notifications"]
+						}
+					}
+				},
+				{
+					"name": "3.5 Cancel the booking (refund per policy)",
+					"request": {
+						"method": "DELETE",
+						"header": [{ "key": "Authorization", "value": "Bearer {{customerToken}}" }],
+						"url": {
+							"raw": "{{baseUrl}}/api/bookings/{{bookingId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "bookings", "{{bookingId}}"]
+						}
+					}
+				},
+				{
+					"name": "3.6 Seat map again (seats released)",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{baseUrl}}/api/shows/1/seats",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "shows", "1", "seats"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "4 - Discounts & Admin",
+			"item": [
+				{
+					"name": "4.1 Create discount code SAVE10 (admin)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{adminToken}}" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"code\": \"SAVE10\",\n  \"type\": \"PERCENT\",\n  \"amount\": 10,\n  \"minAmount\": 100,\n  \"maxUses\": 100\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/admin/discount-codes",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "admin", "discount-codes"]
+						}
+					}
+				},
+				{
+					"name": "4.2 Preview the discount",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{customerToken}}" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"code\": \"SAVE10\",\n  \"subtotal\": 1000\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/discounts/preview",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "discounts", "preview"]
+						}
+					}
+				},
+				{
+					"name": "4.3 Hold seats 3 and 4",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.collectionVariables.set('holdId', pm.response.json().holdId);"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{customerToken}}" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"showId\": 1,\n  \"showSeatIds\": [3, 4]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/holds",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "holds"]
+						}
+					}
+				},
+				{
+					"name": "4.4 Book with the discount code",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{customerToken}}" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"holdId\": {{holdId}},\n  \"discountCode\": \"SAVE10\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/bookings",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "bookings"]
+						}
+					}
+				},
+				{
+					"name": "4.5 List pricing tiers (admin)",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+						"url": {
+							"raw": "{{baseUrl}}/api/admin/pricing-tiers",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "admin", "pricing-tiers"]
+						}
+					}
+				},
+				{
+					"name": "4.6 Update premium multiplier (admin)",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{adminToken}}" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"code\": \"SEAT_PREMIUM\",\n  \"description\": \"Premium seat\",\n  \"multiplier\": 1.75\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/admin/pricing-tiers",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "admin", "pricing-tiers"]
+						}
+					}
+				},
+				{
+					"name": "4.7 Refund policy tiers (admin)",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+						"url": {
+							"raw": "{{baseUrl}}/api/admin/refund-policies",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "admin", "refund-policies"]
+						}
+					}
+				},
+				{
+					"name": "4.8 RBAC check: admin endpoint with customer token (403)",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer {{customerToken}}" }],
+						"url": {
+							"raw": "{{baseUrl}}/api/admin/pricing-tiers",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "admin", "pricing-tiers"]
+						}
+					}
+				}
+			]
+		}
+	]
+}
