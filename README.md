@@ -57,8 +57,7 @@ curl -X POST http://localhost:8080/api/v1/customers \
   -d '{"email":"customer@example.com","password":"customer123"}'
 ```
 
-Then follow [api.http](api.http) in IntelliJ, VS Code REST Client, or the curl walkthrough in
-[DEMO.md](DEMO.md).
+Then follow [api.http](api.http) in IntelliJ or VS Code REST Client for the complete booking flow.
 
 ## Run With PostgreSQL
 
@@ -154,13 +153,3 @@ docs/raw/                          original PDF and requirements transcription
 - A zero-percent cancellation is still recorded as a refund decision for auditability.
 - List APIs are intentionally unpaginated at assignment scale.
 - Deployment, containers, CI/CD, microservices, and production observability remain out of scope.
-
-## Submission Material
-
-- [Original requirement PDF](docs/raw/movie-ticket-booking-requirements.pdf)
-- [Requirements transcription](docs/raw/requirements.txt)
-- [Agent guidance](AGENTS.md)
-- [Skills and tools used](docs/skills-used.md)
-- [AI workflow](docs/ai-workflow.md)
-- [Video walkthrough outline](DEMO.md)
-

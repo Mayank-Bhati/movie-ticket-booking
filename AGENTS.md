@@ -1,4 +1,4 @@
-# Agent Guide
+# Engineering Guidelines
 
 ## Mission
 
@@ -23,4 +23,3 @@ refund calculations are the highest-risk paths and must be covered by integratio
 - Update the OpenAPI examples and architecture decisions when a contract or major design choice
   changes.
 - Never commit credentials, generated build output, local database files, or access tokens.
-
