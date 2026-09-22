@@ -126,7 +126,6 @@ src/main/java/com/mayankbhati/movietickets/
 src/main/resources/db/migration/   versioned database schema
 src/test/java/                     integration and concurrency tests
 docs/architecture/                 system design, data model and ADRs
-docs/raw/                          original PDF and requirements transcription
 ```
 
 ## Core Invariants
