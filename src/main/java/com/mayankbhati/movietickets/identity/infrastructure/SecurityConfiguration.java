@@ -27,6 +27,7 @@ class SecurityConfiguration {
                         .requestMatchers(HttpMethod.GET, "/api/v1/cities", "/api/v1/movies",
                                 "/api/v1/showings", "/api/v1/showings/*/seats").permitAll()
                         .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
+                        .requestMatchers("/api/v1/holds/**", "/api/v1/bookings/**").hasRole("CUSTOMER")
                         .anyRequest().authenticated())
                 .build();
     }
@@ -47,4 +48,3 @@ class SecurityConfiguration {
                         "Unknown account"));
     }
 }
-
