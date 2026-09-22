@@ -1,0 +1,13 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:movie-tickets-test;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1;DEFAULT_NULL_ORDERING=HIGH
+    username: sa
+    password:
+  flyway:
+    locations: classpath:db/migration
+
+booking:
+  hold-ttl: PT5M
+  expiry-sweep-delay-ms: 600000
+  outbox-dispatch-delay-ms: 600000
+

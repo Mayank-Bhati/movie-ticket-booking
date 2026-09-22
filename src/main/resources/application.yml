@@ -1,0 +1,26 @@
+spring:
+  application:
+    name: movie-ticket-booking
+  datasource:
+    url: ${DB_URL:jdbc:h2:file:./data/movie-tickets;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH}
+    username: ${DB_USERNAME:sa}
+    password: ${DB_PASSWORD:}
+  flyway:
+    locations: classpath:db/migration
+  jackson:
+    default-property-inclusion: non_null
+
+server:
+  port: ${PORT:8080}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+booking:
+  hold-ttl: ${HOLD_TTL:PT5M}
+  expiry-sweep-delay-ms: ${HOLD_SWEEP_DELAY_MS:30000}
+  outbox-dispatch-delay-ms: ${OUTBOX_DELAY_MS:2000}
+

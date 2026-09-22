@@ -1,0 +1,30 @@
+Movie Ticket Booking System - source requirements
+
+Build a movie ticket booking system with multiple cities, theaters, shows, and seat-level
+booking. Customers select seats using time-bound holds that expire automatically. The system
+supports regular, premium, and weekend pricing, discount codes, payment, booking confirmation,
+and cancellation refunds under configurable policies. Concurrent attempts for the same seat
+must be serialized without double allocation. Confirmation and reminder notifications must not
+block booking.
+
+Roles:
+- Admin: manage cities, theaters, shows, seat layouts, pricing tiers, and refund policies.
+- Customer: browse shows, book/cancel seats, and view booking history.
+
+Required delivery scope:
+- REST APIs for core flows.
+- Database persistence.
+- Basic role-based access control.
+- Input validation and error handling.
+- Unit and integration tests for core flows.
+- README, agent guidance, skills used, and raw source files.
+
+Explicitly out of scope:
+- UI/frontend.
+- Deployment, containerization, and CI/CD.
+- Distributed systems and microservices.
+- OAuth, SSO, and MFA.
+- Production-grade observability and monitoring.
+
+This transcription preserves the source PDF's requirements while removing page-layout noise.
+
