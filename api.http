@@ -1,0 +1,60 @@
+@baseUrl = http://localhost:8080/api/v1
+@admin = admin@tickets.local
+@adminPassword = admin12345
+@customer = customer@example.com
+@customerPassword = customer123
+
+### Health
+GET http://localhost:8080/actuator/health
+
+### Register customer
+POST {{baseUrl}}/customers
+Content-Type: application/json
+
+{
+  "email": "{{customer}}",
+  "password": "{{customerPassword}}"
+}
+
+### Browse seeded showing
+GET {{baseUrl}}/showings
+
+### Browse seeded seats (fresh demo database uses showing 1)
+GET {{baseUrl}}/showings/1/seats
+
+### Hold two seats (replace IDs after reading the seat map)
+POST {{baseUrl}}/holds
+Authorization: Basic {{customer}} {{customerPassword}}
+Content-Type: application/json
+
+{
+  "showingId": 1,
+  "showSeatIds": [1, 2]
+}
+
+### Confirm booking (replace holdId from previous response)
+POST {{baseUrl}}/bookings
+Authorization: Basic {{customer}} {{customerPassword}}
+Idempotency-Key: demo-booking-001
+Content-Type: application/json
+
+{
+  "holdId": "replace-with-hold-id",
+  "discountCode": "WELCOME10",
+  "paymentMethod": "mock-card"
+}
+
+### Booking history
+GET {{baseUrl}}/bookings
+Authorization: Basic {{customer}} {{customerPassword}}
+
+### Example admin request
+POST {{baseUrl}}/admin/cities
+Authorization: Basic {{admin}} {{adminPassword}}
+Content-Type: application/json
+
+{
+  "name": "Mumbai",
+  "timezone": "Asia/Kolkata"
+}
+

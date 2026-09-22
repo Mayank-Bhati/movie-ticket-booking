@@ -1,6 +1,5 @@
 package com.mayankbhati.movietickets.catalog.application;
 
-import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.DayOfWeek;
 import java.time.Instant;
@@ -8,7 +7,6 @@ import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -340,4 +338,3 @@ public class CatalogService {
     private record SeatForShow(long id, String category, int multiplierBps) {
     }
 }
-

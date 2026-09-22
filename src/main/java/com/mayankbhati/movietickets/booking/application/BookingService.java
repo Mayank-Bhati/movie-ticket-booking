@@ -3,8 +3,6 @@ package com.mayankbhati.movietickets.booking.application;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.OffsetDateTime;
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -396,4 +394,3 @@ public class BookingService {
                                      String paymentReference) {
     }
 }
-
