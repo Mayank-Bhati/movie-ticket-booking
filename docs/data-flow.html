@@ -1,0 +1,860 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Interactive data-flow and concurrency guide for the Movie Ticket Booking System.">
+  <title>Movie Ticket Booking | Data Flow and Concurrency</title>
+  <style>
+    :root {
+      --ink: #17221f;
+      --muted: #60706a;
+      --paper: #f4f7f4;
+      --surface: #ffffff;
+      --line: #d7dfda;
+      --forest: #146b54;
+      --forest-dark: #0b4a3a;
+      --mint: #d9f2e8;
+      --coral: #e56b55;
+      --coral-soft: #fde5df;
+      --gold: #d59b20;
+      --gold-soft: #fff1c9;
+      --blue: #3976a8;
+      --blue-soft: #e2eff8;
+      --code: #12231e;
+      --shadow: 0 16px 40px rgba(20, 48, 39, 0.09);
+      --nav-width: 260px;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--paper);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 16px;
+      line-height: 1.65;
+    }
+    button, input { font: inherit; }
+    button { cursor: pointer; }
+    a { color: inherit; }
+    code, .mono {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      font-size: 0.92em;
+    }
+    code {
+      padding: 0.12rem 0.35rem;
+      border: 1px solid #dce5df;
+      border-radius: 4px;
+      background: #edf2ef;
+    }
+
+    .progress {
+      position: fixed;
+      z-index: 100;
+      top: 0;
+      left: 0;
+      width: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--forest), var(--gold), var(--coral));
+    }
+
+    .sidebar {
+      position: fixed;
+      z-index: 30;
+      inset: 0 auto 0 0;
+      width: var(--nav-width);
+      padding: 30px 22px;
+      color: #ecf8f2;
+      background: #102b24;
+      border-right: 1px solid rgba(255,255,255,0.1);
+      overflow-y: auto;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 34px;
+      text-decoration: none;
+    }
+    .brand-mark {
+      display: grid;
+      place-items: center;
+      width: 38px;
+      height: 38px;
+      color: #102b24;
+      font-weight: 900;
+      background: #9be0c8;
+      border-radius: 7px;
+    }
+    .brand-copy { line-height: 1.2; }
+    .brand-copy strong { display: block; font-size: 0.92rem; }
+    .brand-copy span { color: #9fc0b5; font-size: 0.74rem; }
+    .nav-label {
+      margin: 20px 10px 8px;
+      color: #789e91;
+      font-size: 0.67rem;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+    .nav-link {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-height: 38px;
+      padding: 7px 10px;
+      color: #b9d1c9;
+      border-left: 2px solid transparent;
+      text-decoration: none;
+      transition: 180ms ease;
+    }
+    .nav-link:hover, .nav-link.active {
+      color: #fff;
+      background: rgba(255,255,255,0.06);
+      border-left-color: #9be0c8;
+    }
+    .nav-index { width: 21px; color: #6f9c8d; font-size: 0.72rem; }
+    .nav-note {
+      margin-top: 30px;
+      padding: 14px;
+      color: #a9c4bb;
+      font-size: 0.76rem;
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 6px;
+    }
+
+    main { margin-left: var(--nav-width); }
+    .hero {
+      position: relative;
+      min-height: 92vh;
+      padding: clamp(60px, 9vw, 118px) clamp(26px, 7vw, 100px) 70px;
+      color: #f5fff9;
+      background-color: #14352c;
+      background-image:
+        linear-gradient(rgba(153, 215, 193, 0.08) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(153, 215, 193, 0.08) 1px, transparent 1px);
+      background-size: 46px 46px;
+      overflow: hidden;
+    }
+    .hero::after {
+      content: "";
+      position: absolute;
+      inset: auto 0 0;
+      height: 5px;
+      background: linear-gradient(90deg, #8bd9be 0 38%, #f0be4c 38% 67%, #ed806c 67%);
+    }
+    .hero-inner { position: relative; z-index: 2; max-width: 1160px; }
+    .eyebrow {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: #9be0c8;
+      font-size: 0.75rem;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+    .eyebrow::before { content: ""; width: 32px; height: 2px; background: currentColor; }
+    h1 {
+      max-width: 980px;
+      margin: 22px 0 20px;
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: clamp(3rem, 7vw, 6.8rem);
+      font-weight: 500;
+      line-height: 0.98;
+      letter-spacing: 0;
+    }
+    .hero-copy {
+      max-width: 760px;
+      margin: 0;
+      color: #c0d8cf;
+      font-size: clamp(1rem, 1.7vw, 1.25rem);
+    }
+    .hero-metrics {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(130px, 1fr));
+      gap: 1px;
+      max-width: 890px;
+      margin-top: 58px;
+      background: rgba(255,255,255,0.15);
+      border: 1px solid rgba(255,255,255,0.15);
+    }
+    .metric { padding: 20px; background: rgba(11, 38, 31, 0.88); }
+    .metric strong { display: block; color: #fff; font-size: 1.45rem; }
+    .metric span { color: #94b5aa; font-size: 0.76rem; text-transform: uppercase; }
+    .hero-rail {
+      position: absolute;
+      right: 5vw;
+      bottom: 72px;
+      width: 240px;
+      height: 240px;
+      border: 1px solid rgba(255,255,255,0.16);
+      border-radius: 50%;
+    }
+    .hero-rail::before, .hero-rail::after {
+      content: "";
+      position: absolute;
+      border-radius: 50%;
+      border: 1px solid rgba(255,255,255,0.12);
+    }
+    .hero-rail::before { inset: 34px; }
+    .hero-rail::after { inset: 74px; }
+    .orbit-dot {
+      position: absolute;
+      top: 50%; left: 50%;
+      width: 10px; height: 10px;
+      margin: -5px;
+      background: #f0be4c;
+      border-radius: 50%;
+      box-shadow: 0 0 18px rgba(240,190,76,0.8);
+      animation: orbit 8s linear infinite;
+    }
+    @keyframes orbit { to { transform: rotate(360deg) translateX(120px) rotate(-360deg); } }
+
+    .content { max-width: 1220px; margin: 0 auto; padding: 0 clamp(22px, 5vw, 68px) 100px; }
+    section { padding: 92px 0 18px; scroll-margin-top: 20px; }
+    .section-head {
+      display: grid;
+      grid-template-columns: 110px minmax(0, 780px);
+      gap: 26px;
+      align-items: start;
+      margin-bottom: 38px;
+    }
+    .section-number { color: var(--forest); font-weight: 800; font-size: 0.78rem; }
+    h2 {
+      margin: 0 0 12px;
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: clamp(2.1rem, 4vw, 3.5rem);
+      font-weight: 500;
+      line-height: 1.06;
+      letter-spacing: 0;
+    }
+    h3 { margin: 0 0 8px; font-size: 1rem; letter-spacing: 0; }
+    .lede { margin: 0; color: var(--muted); font-size: 1.05rem; }
+    .reveal { opacity: 0; transform: translateY(18px); transition: opacity 600ms ease, transform 600ms ease; }
+    .reveal.visible { opacity: 1; transform: none; }
+
+    .system-map {
+      display: grid;
+      grid-template-columns: 0.8fr 1.45fr 0.9fr;
+      gap: 24px;
+      align-items: stretch;
+    }
+    .lane {
+      position: relative;
+      padding: 18px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+    }
+    .lane-title { margin-bottom: 16px; color: var(--muted); font-size: 0.72rem; font-weight: 800; text-transform: uppercase; }
+    .node {
+      position: relative;
+      margin: 10px 0;
+      padding: 14px 15px;
+      background: #f8faf8;
+      border: 1px solid var(--line);
+      border-left: 4px solid var(--forest);
+      border-radius: 5px;
+    }
+    .node small { display: block; margin-top: 3px; color: var(--muted); }
+    .node.coral { border-left-color: var(--coral); }
+    .node.gold { border-left-color: var(--gold); }
+    .node.blue { border-left-color: var(--blue); }
+    .flow-pulse {
+      position: absolute;
+      top: 50%; right: -31px;
+      z-index: 2;
+      width: 7px; height: 7px;
+      background: var(--coral);
+      border-radius: 50%;
+      animation: hop 1.8s ease-in-out infinite;
+    }
+    @keyframes hop { 0%, 100% { transform: translateX(-18px); opacity: 0; } 45% { opacity: 1; } 80% { transform: translateX(18px); opacity: 0; } }
+
+    .flow-shell { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; box-shadow: var(--shadow); overflow: hidden; }
+    .flow-tabs { display: grid; grid-template-columns: repeat(4, 1fr); border-bottom: 1px solid var(--line); }
+    .flow-tab {
+      min-height: 54px;
+      color: var(--muted);
+      background: #f7f9f7;
+      border: 0;
+      border-right: 1px solid var(--line);
+      font-weight: 750;
+    }
+    .flow-tab:last-child { border-right: 0; }
+    .flow-tab.active { color: var(--forest-dark); background: var(--mint); box-shadow: inset 0 -3px 0 var(--forest); }
+    .flow-body { display: grid; grid-template-columns: 1.55fr 0.85fr; min-height: 520px; }
+    .stage { position: relative; padding: 42px 35px; overflow: hidden; }
+    .stage::before {
+      content: "";
+      position: absolute;
+      top: 94px; left: 72px; right: 72px;
+      height: 2px;
+      background: var(--line);
+    }
+    .steps { position: relative; z-index: 2; display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+    .step {
+      min-height: 140px;
+      padding: 20px 16px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      transition: 250ms ease;
+    }
+    .step.active { transform: translateY(-5px); border-color: var(--forest); box-shadow: 0 14px 28px rgba(20,107,84,0.12); }
+    .step-index {
+      display: grid; place-items: center;
+      width: 30px; height: 30px;
+      margin: -36px auto 18px;
+      color: #fff; background: var(--forest); border: 5px solid var(--surface); border-radius: 50%;
+    }
+    .step strong { display: block; text-align: center; }
+    .step p { margin: 7px 0 0; color: var(--muted); font-size: 0.82rem; text-align: center; }
+    .packet {
+      position: absolute;
+      z-index: 3;
+      top: 88px; left: 75px;
+      width: 13px; height: 13px;
+      background: var(--coral);
+      border: 3px solid #fff;
+      border-radius: 50%;
+      box-shadow: 0 0 0 4px rgba(229,107,85,0.16);
+      animation: packet 4.2s ease-in-out infinite;
+    }
+    @keyframes packet { 0%, 8% { left: 11%; } 31%, 42% { left: 49%; } 65%, 78% { left: 86%; } 100% { left: 11%; } }
+    .flow-detail { padding: 34px 28px; color: #e4f1ec; background: var(--code); }
+    .flow-detail h3 { color: #9be0c8; }
+    .flow-detail ol { margin: 18px 0 0; padding-left: 20px; }
+    .flow-detail li { margin: 9px 0; color: #bdd1ca; font-size: 0.86rem; }
+    .flow-detail code { color: #ffcf67; background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.1); }
+    .tx-boundary { margin-top: 24px; padding: 13px; color: #f6d891; border: 1px dashed rgba(246,216,145,0.5); border-radius: 5px; font-size: 0.78rem; }
+
+    .state-layout { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 24px; }
+    .state-machine { padding: 32px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+    .states { display: grid; grid-template-columns: repeat(3, 1fr); gap: 38px; align-items: center; margin: 32px 0; }
+    .state {
+      position: relative;
+      display: grid; place-items: center;
+      min-height: 100px;
+      padding: 12px;
+      border: 2px solid var(--line);
+      border-radius: 7px;
+      font-weight: 850;
+      background: #fff;
+      transition: 240ms ease;
+    }
+    .state.active { color: #fff; background: var(--forest); border-color: var(--forest); transform: scale(1.04); }
+    .state:not(:last-child)::after { content: ">"; position: absolute; right: -27px; color: var(--gold); font-size: 1.35rem; }
+    .state-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    .action-btn, .run-btn {
+      min-height: 42px;
+      padding: 9px 14px;
+      color: var(--forest-dark);
+      background: var(--mint);
+      border: 1px solid #a6d9c6;
+      border-radius: 5px;
+      font-weight: 750;
+    }
+    .action-btn:hover, .run-btn:hover { background: #c8eadf; }
+    .invariant-list { display: grid; gap: 10px; }
+    .invariant { padding: 16px; border-left: 4px solid var(--gold); background: var(--gold-soft); }
+    .invariant strong { display: block; }
+    .invariant span { color: #6f613e; font-size: 0.84rem; }
+
+    .race-lab { padding: 30px; background: #152923; color: #eef8f4; border-radius: 8px; box-shadow: var(--shadow); }
+    .race-toolbar { display: flex; justify-content: space-between; gap: 20px; align-items: center; margin-bottom: 28px; }
+    .race-toolbar p { max-width: 680px; margin: 0; color: #a8c1b8; }
+    .run-btn { flex: 0 0 auto; color: #112d25; background: #9be0c8; }
+    .race-grid { display: grid; grid-template-columns: 1fr 180px 1fr; gap: 24px; align-items: stretch; }
+    .contender { padding: 22px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.14); border-radius: 6px; }
+    .contender h3 { display: flex; justify-content: space-between; }
+    .status-pill { padding: 2px 8px; color: #afc6be; border: 1px solid rgba(255,255,255,0.18); border-radius: 12px; font-size: 0.68rem; }
+    .race-track { height: 7px; margin: 24px 0 12px; background: #29433a; border-radius: 5px; overflow: hidden; }
+    .race-bar { width: 0; height: 100%; background: var(--coral); transition: width 650ms ease; }
+    .database-lock { display: grid; place-items: center; padding: 15px; text-align: center; border: 1px dashed #87bca9; border-radius: 6px; }
+    .lock-icon { font-size: 2rem; color: #f0be4c; }
+    .database-lock strong { display: block; }
+    .database-lock small { color: #92afa5; }
+    .race-log { min-height: 116px; margin-top: 24px; padding: 16px; color: #9be0c8; background: #0d1d18; border-left: 3px solid var(--gold); font-size: 0.78rem; }
+    .race-log div { opacity: 0; transform: translateY(4px); animation: logIn 250ms forwards; }
+    @keyframes logIn { to { opacity: 1; transform: none; } }
+
+    .lock-grid, .failure-grid, .scheduler-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+    .info-card { padding: 20px; background: var(--surface); border: 1px solid var(--line); border-radius: 7px; }
+    .info-card .tag { color: var(--forest); font-size: 0.68rem; font-weight: 850; text-transform: uppercase; }
+    .info-card p { margin: 8px 0 0; color: var(--muted); font-size: 0.86rem; }
+    .info-card.warning { background: var(--coral-soft); border-color: #f0b8aa; }
+    .info-card.warning .tag { color: #a33e2c; }
+    .info-card.blue { background: var(--blue-soft); border-color: #b9d4e8; }
+    .info-card.gold { background: var(--gold-soft); border-color: #ead28d; }
+
+    .timeline { position: relative; display: grid; gap: 18px; margin-left: 18px; padding-left: 38px; border-left: 2px solid var(--line); }
+    .timeline-item { position: relative; padding: 18px 20px; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; }
+    .timeline-item::before { content: ""; position: absolute; top: 25px; left: -46px; width: 14px; height: 14px; background: var(--forest); border: 5px solid var(--paper); border-radius: 50%; }
+    .timeline-item small { color: var(--coral); font-weight: 800; }
+
+    .schema-wrap { overflow-x: auto; padding: 28px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+    .schema-map { display: grid; grid-template-columns: repeat(4, minmax(185px, 1fr)); gap: 14px; min-width: 820px; }
+    .table-box { padding: 15px; border-top: 4px solid var(--forest); background: #f7faf8; box-shadow: inset 0 0 0 1px var(--line); }
+    .table-box.booking { border-color: var(--coral); }
+    .table-box.support { border-color: var(--gold); }
+    .table-box strong { display: block; margin-bottom: 7px; }
+    .table-box span { display: block; color: var(--muted); font-size: 0.75rem; }
+    .constraint-strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; margin-top: 18px; background: var(--line); border: 1px solid var(--line); }
+    .constraint-strip div { padding: 14px; background: #fff; }
+    .constraint-strip strong { display: block; font-size: 0.82rem; }
+    .constraint-strip span { color: var(--muted); font-size: 0.74rem; }
+
+    .failure-table { width: 100%; border-collapse: collapse; background: var(--surface); box-shadow: var(--shadow); }
+    .failure-table th, .failure-table td { padding: 15px 17px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+    .failure-table th { color: var(--forest-dark); background: var(--mint); font-size: 0.76rem; text-transform: uppercase; }
+    .failure-table td { font-size: 0.86rem; }
+    .failure-table tr:last-child td { border-bottom: 0; }
+
+    .footer { margin-top: 90px; padding: 34px 0 10px; border-top: 1px solid var(--line); color: var(--muted); }
+    .footer strong { color: var(--ink); }
+    .mobile-menu { display: none; }
+
+    @media (max-width: 1050px) {
+      :root { --nav-width: 220px; }
+      .hero-rail { display: none; }
+      .system-map, .state-layout { grid-template-columns: 1fr; }
+      .flow-body { grid-template-columns: 1fr; }
+      .race-grid { grid-template-columns: 1fr; }
+      .database-lock { min-height: 130px; }
+      .lock-grid, .failure-grid, .scheduler-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 760px) {
+      .sidebar { transform: translateX(-100%); transition: transform 220ms ease; }
+      .sidebar.open { transform: none; }
+      main { margin-left: 0; }
+      .mobile-menu {
+        display: grid; place-items: center; position: fixed; z-index: 50; top: 14px; right: 14px;
+        width: 44px; height: 44px; color: #fff; background: #102b24; border: 1px solid #41645a; border-radius: 6px;
+      }
+      .hero { min-height: 88vh; padding-top: 86px; }
+      .hero-metrics { grid-template-columns: repeat(2, 1fr); }
+      .section-head { grid-template-columns: 1fr; gap: 8px; }
+      .flow-tabs { grid-template-columns: repeat(2, 1fr); }
+      .stage { padding: 40px 18px 24px; }
+      .stage::before, .packet { display: none; }
+      .steps { grid-template-columns: 1fr; gap: 12px; }
+      .step { min-height: auto; }
+      .step-index { margin: -6px 0 10px; }
+      .states { grid-template-columns: 1fr; gap: 18px; }
+      .state:not(:last-child)::after { content: "v"; right: auto; bottom: -23px; }
+      .lock-grid, .failure-grid, .scheduler-grid, .constraint-strip { grid-template-columns: 1fr; }
+      .race-toolbar { align-items: flex-start; flex-direction: column; }
+      .failure-table { display: block; overflow-x: auto; white-space: nowrap; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+      .reveal { opacity: 1; transform: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="progress" id="progress"></div>
+  <button class="mobile-menu" id="menuButton" aria-label="Open navigation" aria-expanded="false">&#9776;</button>
+  <aside class="sidebar" id="sidebar">
+    <a class="brand" href="#top">
+      <span class="brand-mark">MT</span>
+      <span class="brand-copy"><strong>Movie Tickets</strong><span>Runtime field guide</span></span>
+    </a>
+    <div class="nav-label">System</div>
+    <a class="nav-link active" href="#architecture"><span class="nav-index">01</span>Architecture</a>
+    <a class="nav-link" href="#flows"><span class="nav-index">02</span>Request flows</a>
+    <a class="nav-link" href="#states"><span class="nav-index">03</span>State model</a>
+    <div class="nav-label">Correctness</div>
+    <a class="nav-link" href="#concurrency"><span class="nav-index">04</span>Concurrency</a>
+    <a class="nav-link" href="#transactions"><span class="nav-index">05</span>Transactions</a>
+    <a class="nav-link" href="#async"><span class="nav-index">06</span>Async work</a>
+    <div class="nav-label">Reference</div>
+    <a class="nav-link" href="#data"><span class="nav-index">07</span>Data model</a>
+    <a class="nav-link" href="#failure"><span class="nav-index">08</span>Failure behavior</a>
+    <a class="nav-link" href="#proof"><span class="nav-index">09</span>Verification</a>
+    <div class="nav-note">Implementation-aligned<br><span class="mono">Spring Boot 3.4 / JPA</span></div>
+  </aside>
+
+  <main id="top">
+    <header class="hero">
+      <div class="hero-inner">
+        <div class="eyebrow">Data flow and concurrency</div>
+        <h1>One seat.<br>One winner.</h1>
+        <p class="hero-copy">A visual guide to how requests cross module boundaries, how database locks prevent double booking, and how payment, refunds, expiry, and notifications remain consistent.</p>
+        <div class="hero-metrics">
+          <div class="metric"><strong>4</strong><span>Business modules</span></div>
+          <div class="metric"><strong>5 min</strong><span>Default hold TTL</span></div>
+          <div class="metric"><strong>1 row</strong><span>Seat truth per show</span></div>
+          <div class="metric"><strong>1 commit</strong><span>Booking plus event</span></div>
+        </div>
+      </div>
+      <div class="hero-rail" aria-hidden="true"><span class="orbit-dot"></span></div>
+    </header>
+
+    <div class="content">
+      <section id="architecture" class="reveal">
+        <div class="section-head">
+          <div class="section-number">01 / SYSTEM</div>
+          <div><h2>A modular monolith with one consistency boundary</h2><p class="lede">HTTP adapters stay thin. Application services coordinate use cases. JPA entities own state transitions. Spring Data and Hibernate translate intent into one relational database transaction.</p></div>
+        </div>
+        <div class="system-map">
+          <div class="lane">
+            <div class="lane-title">Clients</div>
+            <div class="node">Public browser<small>Cities, movies, showings, seats</small><span class="flow-pulse"></span></div>
+            <div class="node coral">Customer<small>Hold, confirm, history, cancel</small><span class="flow-pulse"></span></div>
+            <div class="node gold">Administrator<small>Venues, pricing, policies, shows</small><span class="flow-pulse"></span></div>
+          </div>
+          <div class="lane">
+            <div class="lane-title">Spring Boot process</div>
+            <div class="node blue"><strong>HTTP + Security</strong><small>Validation, Basic auth, role checks, stable error contract</small></div>
+            <div class="node"><strong>Identity</strong><small>Accounts, BCrypt credentials, authenticated Actor</small></div>
+            <div class="node gold"><strong>Catalog</strong><small>Venue hierarchy, show scheduling, price snapshots</small></div>
+            <div class="node coral"><strong>Booking</strong><small>Holds, payment, confirmation, cancellation, refund</small></div>
+            <div class="node blue"><strong>Notification</strong><small>Transactional outbox, reminders, delivery adapter</small></div>
+          </div>
+          <div class="lane">
+            <div class="lane-title">Ports and state</div>
+            <div class="node">Spring Data JPA<small>Derived queries, entity graphs, lock modes</small></div>
+            <div class="node blue">Hibernate<small>Mapping, dirty checking, batching, version checks</small></div>
+            <div class="node gold">H2 / PostgreSQL<small>Constraints, indexes, row locks, durable state</small></div>
+            <div class="node coral">Payment + sender<small>Replaceable interfaces; mock/logging adapters today</small></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="flows" class="reveal">
+        <div class="section-head">
+          <div class="section-number">02 / FLOWS</div>
+          <div><h2>Follow each request through the system</h2><p class="lede">Select a use case. The animation shows the coarse path; the right panel names the exact checks and writes performed inside the transaction.</p></div>
+        </div>
+        <div class="flow-shell">
+          <div class="flow-tabs" role="tablist">
+            <button class="flow-tab active" data-flow="hold" role="tab">Create hold</button>
+            <button class="flow-tab" data-flow="confirm" role="tab">Confirm booking</button>
+            <button class="flow-tab" data-flow="cancel" role="tab">Cancel booking</button>
+            <button class="flow-tab" data-flow="notify" role="tab">Deliver event</button>
+          </div>
+          <div class="flow-body">
+            <div class="stage">
+              <div class="packet" aria-hidden="true"></div>
+              <div class="steps" id="flowSteps"></div>
+            </div>
+            <aside class="flow-detail">
+              <h3 id="flowTitle"></h3>
+              <ol id="flowDetails"></ol>
+              <div class="tx-boundary" id="flowBoundary"></div>
+            </aside>
+          </div>
+        </div>
+      </section>
+
+      <section id="states" class="reveal">
+        <div class="section-head">
+          <div class="section-number">03 / STATE</div>
+          <div><h2>The inventory row is the source of truth</h2><p class="lede"><code>show_seat</code> materializes one physical seat for one showing. Its status controls whether the seat can be allocated, while hold and booking records provide the audit trail.</p></div>
+        </div>
+        <div class="state-layout">
+          <div class="state-machine">
+            <h3>Interactive seat lifecycle</h3>
+            <div class="states">
+              <div class="state active" data-state="AVAILABLE">AVAILABLE</div>
+              <div class="state" data-state="HELD">HELD</div>
+              <div class="state" data-state="BOOKED">BOOKED</div>
+            </div>
+            <div class="state-actions">
+              <button class="action-btn" data-transition="hold">Create hold</button>
+              <button class="action-btn" data-transition="confirm">Capture and confirm</button>
+              <button class="action-btn" data-transition="expire">Expire hold</button>
+              <button class="action-btn" data-transition="cancel">Cancel booking</button>
+              <button class="action-btn" data-transition="reset">Reset</button>
+            </div>
+            <p id="stateMessage" class="mono">Seat can be selected by a customer.</p>
+          </div>
+          <div class="invariant-list">
+            <div class="invariant"><strong>Uniqueness</strong><span><code>(showing_id, seat_id)</code> prevents duplicate inventory rows.</span></div>
+            <div class="invariant"><strong>Price snapshot</strong><span>Category and integer minor-unit price are fixed when the showing is created.</span></div>
+            <div class="invariant"><strong>Traceability</strong><span>Hold items and booking items retain seat and price evidence across transitions.</span></div>
+            <div class="invariant"><strong>Visibility</strong><span>An expired HELD row is displayed as AVAILABLE even before the sweeper physically releases it.</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="concurrency" class="reveal">
+        <div class="section-head">
+          <div class="section-number">04 / LOCKS</div>
+          <div><h2>Two customers race. The database decides.</h2><p class="lede">Both requests can reach the service simultaneously. The first transaction to acquire the row lock proceeds; the second waits, then re-reads the committed status and receives <code>409 SEAT_UNAVAILABLE</code>.</p></div>
+        </div>
+        <div class="race-lab">
+          <div class="race-toolbar">
+            <p>This simulation alternates the winner to emphasize that thread timing is nondeterministic while the invariant is deterministic.</p>
+            <button class="run-btn" id="runRace">&#9654; Run race</button>
+          </div>
+          <div class="race-grid">
+            <div class="contender" id="userA"><h3>User A <span class="status-pill">ready</span></h3><div class="race-track"><div class="race-bar"></div></div><small>Transaction A requests seat row 42</small></div>
+            <div class="database-lock"><div><div class="lock-icon">&#9638;</div><strong>show_seat #42</strong><small>PESSIMISTIC_WRITE</small></div></div>
+            <div class="contender" id="userB"><h3>User B <span class="status-pill">ready</span></h3><div class="race-track"><div class="race-bar"></div></div><small>Transaction B requests seat row 42</small></div>
+          </div>
+          <div class="race-log mono" id="raceLog">Press Run race to trace lock acquisition.</div>
+        </div>
+        <div class="lock-grid" style="margin-top:18px">
+          <div class="info-card"><span class="tag">Seat selection</span><h3>Ordered acquisition</h3><p>Requested show-seat IDs are queried in ascending ID order. Every transaction asks for multi-seat locks in the same order, reducing deadlock cycles.</p></div>
+          <div class="info-card"><span class="tag">Hold conversion</span><h3>Hold then inventory</h3><p>Confirmation locks the hold row, verifies ownership and TTL, then locks all rows carrying that hold ID before payment and conversion.</p></div>
+          <div class="info-card"><span class="tag">Discounts</span><h3>Redemption counter lock</h3><p>A discount row is locked before checking validity and remaining redemptions, preventing concurrent requests from exceeding the configured maximum.</p></div>
+          <div class="info-card"><span class="tag">Cancellation</span><h3>Booking lock</h3><p>The booking row is locked before checking CONFIRMED status, calculating a refund, and releasing its seats, preventing duplicate cancellation.</p></div>
+          <div class="info-card"><span class="tag">Outbox</span><h3>Delivery lock</h3><p>The dispatcher locks up to 25 due PENDING events so two application instances cannot send the same row concurrently.</p></div>
+          <div class="info-card blue"><span class="tag">Secondary guard</span><h3>Optimistic version</h3><p><code>show_seat.version</code> gives Hibernate an additional stale-write check. Pessimistic locking remains the primary allocation mechanism.</p></div>
+        </div>
+      </section>
+
+      <section id="transactions" class="reveal">
+        <div class="section-head">
+          <div class="section-number">05 / ATOMICITY</div>
+          <div><h2>What commits together, and what happens when it fails</h2><p class="lede">Each write use case is a Spring transaction. Managed entity changes are flushed together at commit; an exception rolls the unit of work back.</p></div>
+        </div>
+        <div class="timeline">
+          <div class="timeline-item"><small>HOLD TRANSACTION</small><h3>Inventory and hold agree</h3><p>Expired inventory is reclaimed, requested seat rows are locked, a <code>seat_hold</code> plus items are inserted, and each seat moves to HELD with the same expiry timestamp.</p></div>
+          <div class="timeline-item"><small>CONFIRMATION TRANSACTION</small><h3>Payment evidence, booking, seats, and event agree</h3><p>The active hold and seats are locked, the optional discount is locked, payment is captured, then booking, items, payment record, BOOKED seats, CONVERTED hold, redemption count, and outbox event commit together.</p></div>
+          <div class="timeline-item"><small>CANCELLATION TRANSACTION</small><h3>Refund decision and released inventory agree</h3><p>The booking is locked, the applicable time tier selects a percentage, the payment adapter refunds when needed, then cancellation, refund audit row, AVAILABLE seats, payment status, and outbox event commit together.</p></div>
+          <div class="timeline-item"><small>OUTBOX REQUIREMENT</small><h3>Notification intent cannot escape its parent transaction</h3><p><code>OutboxService.enqueue</code> uses <code>Propagation.MANDATORY</code>. Calling it outside a transaction fails immediately, preventing accidental non-atomic event writes.</p></div>
+        </div>
+        <div class="failure-grid" style="margin-top:18px">
+          <div class="info-card warning"><span class="tag">Production tradeoff</span><h3>Payment runs while locks are held</h3><p>The current mock is instant. A real network gateway could extend lock duration. A production evolution would introduce PENDING_PAYMENT plus webhook reconciliation.</p></div>
+          <div class="info-card warning"><span class="tag">Production tradeoff</span><h3>No SKIP LOCKED dispatch</h3><p>Outbox workers use pessimistic locks without skip-locked partitioning. Multiple instances remain correct but may block each other instead of maximizing throughput.</p></div>
+          <div class="info-card gold"><span class="tag">Database backstop</span><h3>Unique keys close retry races</h3><p><code>(customer_id, idempotency_key)</code>, hold-to-booking uniqueness, event dedupe keys, and one payment/refund per booking protect invariants below application code.</p></div>
+        </div>
+      </section>
+
+      <section id="async" class="reveal">
+        <div class="section-head">
+          <div class="section-number">06 / ASYNC</div>
+          <div><h2>Background work stays outside customer latency</h2><p class="lede">Schedulers maintain availability and delivery. The booking request persists intent; a worker handles notification side effects afterward.</p></div>
+        </div>
+        <div class="scheduler-grid">
+          <div class="info-card"><span class="tag">Every 30 seconds</span><h3>Hold expiry sweep</h3><p>Locks active holds whose expiry is due, marks them EXPIRED, finds HELD seats with due timestamps, and releases them to AVAILABLE. Creating a new hold also performs lazy cleanup first.</p></div>
+          <div class="info-card blue"><span class="tag">Every 2 seconds</span><h3>Outbox dispatch</h3><p>Fetches a locked page of 25 due PENDING events. Success marks SENT. Failure delays the event by 30 seconds; the fifth failed attempt marks it FAILED.</p></div>
+          <div class="info-card gold"><span class="tag">Every 5 minutes</span><h3>Show reminders</h3><p>Finds confirmed bookings starting 55 to 65 minutes ahead, batches customer lookup, and inserts a deduplicated SHOW_REMINDER event.</p></div>
+        </div>
+        <div class="timeline" style="margin-top:26px">
+          <div class="timeline-item"><small>REQUEST PATH</small><h3>Persist notification intent</h3><p><code>BOOKING_CONFIRMED</code> or <code>BOOKING_CANCELLED</code> is serialized to JSON and inserted as PENDING with a unique dedupe key.</p></div>
+          <div class="timeline-item"><small>AFTER COMMIT</small><h3>Claim and deliver</h3><p>The dispatcher locks eligible rows and sends through the <code>NotificationSender</code> port. The local adapter logs the payload; email or SMS can replace it.</p></div>
+          <div class="timeline-item"><small>DELIVERY SEMANTICS</small><h3>At-least-once intent, idempotent row creation</h3><p>Dedupe keys prevent duplicate event rows. A real sender should also be idempotent because a process crash between external delivery and SENT persistence can still cause redelivery.</p></div>
+        </div>
+      </section>
+
+      <section id="data" class="reveal">
+        <div class="section-head">
+          <div class="section-number">07 / DATA</div>
+          <div><h2>The schema mirrors business ownership</h2><p class="lede">Catalog tables define what can be sold. Booking tables record allocation and money. Support tables provide identity and reliable messaging.</p></div>
+        </div>
+        <div class="schema-wrap">
+          <div class="schema-map">
+            <div class="table-box"><strong>city</strong><span>timezone</span></div>
+            <div class="table-box"><strong>theater</strong><span>city_id, address</span></div>
+            <div class="table-box"><strong>screen</strong><span>theater_id</span></div>
+            <div class="table-box"><strong>seat</strong><span>screen_id, row, number, category</span></div>
+            <div class="table-box"><strong>movie</strong><span>duration, certificate, language</span></div>
+            <div class="table-box"><strong>showing</strong><span>movie, screen, policy, start</span></div>
+            <div class="table-box"><strong>pricing_tier</strong><span>category, multiplier_bps</span></div>
+            <div class="table-box"><strong>show_seat</strong><span>price, status, hold, booking, version</span></div>
+            <div class="table-box support"><strong>refund_policy</strong><span>named cancellation policy</span></div>
+            <div class="table-box support"><strong>refund_rule</strong><span>minutes_before, percent</span></div>
+            <div class="table-box support"><strong>discount_code</strong><span>validity, value, redemptions</span></div>
+            <div class="table-box support"><strong>app_user</strong><span>email, hash, role</span></div>
+            <div class="table-box booking"><strong>seat_hold</strong><span>customer, showing, status, expiry</span></div>
+            <div class="table-box booking"><strong>seat_hold_item</strong><span>hold, show_seat, price</span></div>
+            <div class="table-box booking"><strong>booking</strong><span>totals, key, status, timestamps</span></div>
+            <div class="table-box booking"><strong>booking_item</strong><span>seat label and price snapshot</span></div>
+            <div class="table-box booking"><strong>payment</strong><span>capture reference, status</span></div>
+            <div class="table-box booking"><strong>refund</strong><span>amount, percent, reference</span></div>
+            <div class="table-box support"><strong>outbox_event</strong><span>payload, attempts, dedupe, schedule</span></div>
+          </div>
+          <div class="constraint-strip">
+            <div><strong>Money</strong><span>Integer minor units avoid floating-point errors.</span></div>
+            <div><strong>Multipliers</strong><span>Basis points: 10000 = 1.00x, 15000 = 1.50x.</span></div>
+            <div><strong>Time</strong><span>Offset timestamps plus theater-local IANA timezone logic.</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="failure" class="reveal">
+        <div class="section-head">
+          <div class="section-number">08 / FAILURE</div>
+          <div><h2>Predictable behavior under pressure</h2><p class="lede">Failures are part of the design. Business conflicts return stable API codes; transaction failures leave durable state consistent.</p></div>
+        </div>
+        <table class="failure-table">
+          <thead><tr><th>Scenario</th><th>Protection</th><th>Outcome</th></tr></thead>
+          <tbody>
+            <tr><td>Two users hold the same seat</td><td>Ordered <code>PESSIMISTIC_WRITE</code> lock</td><td>One 201 response; one <code>409 SEAT_UNAVAILABLE</code>.</td></tr>
+            <tr><td>Client retries confirmation</td><td>Lookup plus unique customer/key constraint</td><td>The original booking is returned without another charge.</td></tr>
+            <tr><td>Payment is declined</td><td>Exception rolls back transaction</td><td>No booking or payment row; active hold remains retryable.</td></tr>
+            <tr><td>Hold expires before confirmation</td><td>TTL check under hold lock</td><td><code>410 HOLD_EXPIRED</code>; scheduled/lazy cleanup reclaims inventory.</td></tr>
+            <tr><td>Discount limit is contested</td><td>Locked discount row</td><td>Redemptions serialize; requests beyond the limit are rejected.</td></tr>
+            <tr><td>Cancellation is repeated</td><td>Locked booking plus status check</td><td>First succeeds; next receives <code>409 BOOKING_ALREADY_CANCELLED</code>.</td></tr>
+            <tr><td>Notification sender fails</td><td>Transactional outbox retry metadata</td><td>Booking stays valid; event retries and eventually becomes FAILED.</td></tr>
+            <tr><td>Application stops after commit</td><td>Durable PENDING outbox row</td><td>Dispatcher resumes delivery after restart.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="proof" class="reveal">
+        <div class="section-head">
+          <div class="section-number">09 / PROOF</div>
+          <div><h2>The guarantees are exercised, not only documented</h2><p class="lede">The Spring integration suite boots the real context with Flyway, Hibernate, H2, security, repositories, services, and transaction management.</p></div>
+        </div>
+        <div class="lock-grid">
+          <div class="info-card"><span class="tag">Pricing</span><h3>Tier plus weekend snapshots</h3><p>Verifies regular and premium seat prices and the minimum display price for a showing.</p></div>
+          <div class="info-card"><span class="tag">Scheduling</span><h3>Overlap rejection</h3><p>Attempts a conflicting showing on the same screen and expects <code>SCREEN_SCHEDULE_CONFLICT</code>.</p></div>
+          <div class="info-card"><span class="tag">Lifecycle</span><h3>Hold, confirm, retry</h3><p>Confirms once, retries with the same key, and verifies one booking event and BOOKED inventory.</p></div>
+          <div class="info-card"><span class="tag">Rollback</span><h3>Decline then retry</h3><p>Forces a payment decline, then confirms successfully from the same hold with no partial write.</p></div>
+          <div class="info-card"><span class="tag">Refund</span><h3>Discount and cancellation</h3><p>Checks discounted total, time-tiered refund, released seat, and both outbox events.</p></div>
+          <div class="info-card"><span class="tag">Threads</span><h3>One winner race</h3><p>Starts two executor threads behind one latch and asserts exactly one hold plus one seat conflict.</p></div>
+        </div>
+      </section>
+
+      <footer class="footer"><strong>Movie Ticket Booking System</strong><br>Interactive implementation guide generated from the repository's current Spring Boot code and Flyway schema.</footer>
+    </div>
+  </main>
+
+  <script>
+    const flows = {
+      hold: {
+        title: 'Create hold: POST /api/v1/holds',
+        steps: [['HTTP', 'Authenticate customer and validate 1-10 unique show-seat IDs'], ['Service', 'Reclaim expiry, validate showing, lock requested inventory'], ['Database', 'Insert hold and items; update seats to HELD']],
+        details: ['Read the authenticated Actor from Spring Security.', 'Release due holds and seats inside the transaction.', 'Require a future SCHEDULED showing.', 'Select requested rows ordered by ID with PESSIMISTIC_WRITE.', 'Reject missing or non-AVAILABLE seats.', 'Assign one hold ID and one expiration timestamp to every seat.'],
+        boundary: 'Atomic boundary: hold row + hold items + HELD seat updates.'
+      },
+      confirm: {
+        title: 'Confirm: POST /api/v1/bookings',
+        steps: [['Retry guard', 'Resolve existing customer + idempotency key'], ['Locks + payment', 'Lock hold, inventory, optional discount; capture payment'], ['Commit', 'Persist booking, payment, seat transition, outbox event']],
+        details: ['Return the original booking when the request key already exists.', 'Lock and verify an ACTIVE, owned, unexpired hold.', 'Lock held inventory and optional discount redemption counter.', 'Compute subtotal, discount, and INR total from snapshots.', 'Capture through PaymentGateway using a stable provider key.', 'Convert the hold, book seats, save payment, and enqueue confirmation.'],
+        boundary: 'Atomic boundary: booking + items + payment + BOOKED seats + converted hold + discount redemption + PENDING event.'
+      },
+      cancel: {
+        title: 'Cancel: DELETE /api/v1/bookings/{id}',
+        steps: [['Lock booking', 'Verify ownership and CONFIRMED state'], ['Refund policy', 'Select rule by minutes before show and call refund'], ['Release', 'Cancel booking, release seats, persist audit and event']],
+        details: ['Lock the booking row before reading mutable status.', 'Hide cross-customer bookings behind BOOKING_NOT_FOUND.', 'Calculate minutes remaining, never below zero.', 'Choose the highest threshold less than or equal to minutes remaining.', 'Refund captured payment when the calculated amount is positive.', 'Release all booking inventory and record a refund decision.'],
+        boundary: 'Atomic boundary: CANCELLED booking + refund row + AVAILABLE seats + payment status + PENDING event.'
+      },
+      notify: {
+        title: 'Outbox delivery: scheduled worker',
+        steps: [['Claim', 'Lock up to 25 due PENDING rows'], ['Send', 'Invoke NotificationSender outside the request path'], ['Resolve', 'Mark SENT or schedule retry in 30 seconds']],
+        details: ['Poll every two seconds by default.', 'Order events by ID for predictable processing.', 'Hold pessimistic locks while each selected event is handled.', 'On success, set SENT, sentAt, and increment attempts.', 'On failure, return to PENDING with delayed availability.', 'After five failed attempts, mark the event FAILED.'],
+        boundary: 'Worker transaction: locked event batch + delivery outcome. Booking transaction already completed.'
+      }
+    };
+
+    const flowSteps = document.getElementById('flowSteps');
+    const flowTitle = document.getElementById('flowTitle');
+    const flowDetails = document.getElementById('flowDetails');
+    const flowBoundary = document.getElementById('flowBoundary');
+
+    function renderFlow(name) {
+      const flow = flows[name];
+      flowTitle.textContent = flow.title;
+      flowSteps.innerHTML = flow.steps.map((step, index) => `<div class="step${index === 0 ? ' active' : ''}"><span class="step-index">${index + 1}</span><strong>${step[0]}</strong><p>${step[1]}</p></div>`).join('');
+      flowDetails.innerHTML = flow.details.map(item => `<li>${item}</li>`).join('');
+      flowBoundary.textContent = flow.boundary;
+      const steps = [...flowSteps.children];
+      let current = 0;
+      clearInterval(window.flowTimer);
+      window.flowTimer = setInterval(() => {
+        steps[current].classList.remove('active');
+        current = (current + 1) % steps.length;
+        steps[current].classList.add('active');
+      }, 1400);
+    }
+
+    document.querySelectorAll('.flow-tab').forEach(tab => tab.addEventListener('click', () => {
+      document.querySelectorAll('.flow-tab').forEach(item => item.classList.remove('active'));
+      tab.classList.add('active');
+      renderFlow(tab.dataset.flow);
+    }));
+    renderFlow('hold');
+
+    let seatState = 'AVAILABLE';
+    const messages = {
+      AVAILABLE: 'Seat can be selected by a customer.',
+      HELD: 'Seat has a hold ID and expiry; other customers receive a conflict.',
+      BOOKED: 'Seat is attached to a confirmed booking and cannot be held.'
+    };
+    function setSeatState(next, note) {
+      seatState = next;
+      document.querySelectorAll('.state').forEach(item => item.classList.toggle('active', item.dataset.state === next));
+      document.getElementById('stateMessage').textContent = note || messages[next];
+    }
+    document.querySelectorAll('[data-transition]').forEach(button => button.addEventListener('click', () => {
+      const action = button.dataset.transition;
+      if (action === 'hold' && seatState === 'AVAILABLE') setSeatState('HELD');
+      else if (action === 'confirm' && seatState === 'HELD') setSeatState('BOOKED');
+      else if (action === 'expire' && seatState === 'HELD') setSeatState('AVAILABLE', 'Expired hold released; the seat is available again.');
+      else if (action === 'cancel' && seatState === 'BOOKED') setSeatState('AVAILABLE', 'Cancellation released the inventory after the refund decision.');
+      else if (action === 'reset') setSeatState('AVAILABLE');
+      else document.getElementById('stateMessage').textContent = `Invalid transition from ${seatState}. The service rejects this state change.`;
+    }));
+
+    let raceCount = 0;
+    const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+    document.getElementById('runRace').addEventListener('click', async event => {
+      const button = event.currentTarget;
+      button.disabled = true;
+      raceCount += 1;
+      const winner = raceCount % 2 ? 'userA' : 'userB';
+      const loser = winner === 'userA' ? 'userB' : 'userA';
+      const log = document.getElementById('raceLog');
+      const users = ['userA', 'userB'].map(id => document.getElementById(id));
+      users.forEach(user => { user.querySelector('.race-bar').style.width = '0'; user.querySelector('.status-pill').textContent = 'running'; });
+      log.innerHTML = '';
+      const addLog = text => { const line = document.createElement('div'); line.textContent = text; log.appendChild(line); };
+      addLog('T+00ms  Both transactions begin and request show_seat #42.');
+      await wait(350);
+      users.forEach(user => user.querySelector('.race-bar').style.width = '58%');
+      addLog(`T+12ms  ${winner === 'userA' ? 'User A' : 'User B'} acquires the row lock. The other transaction waits.`);
+      document.getElementById(winner).querySelector('.race-bar').style.width = '100%';
+      document.getElementById(winner).querySelector('.status-pill').textContent = 'lock owner';
+      document.getElementById(loser).querySelector('.status-pill').textContent = 'waiting';
+      await wait(900);
+      addLog(`T+41ms  Winner writes HELD and commits. Waiting transaction acquires the lock next.`);
+      await wait(650);
+      document.getElementById(loser).querySelector('.race-bar').style.width = '100%';
+      document.getElementById(winner).querySelector('.status-pill').textContent = '201 created';
+      document.getElementById(loser).querySelector('.status-pill').textContent = '409 conflict';
+      addLog('T+44ms  Loser re-reads status=HELD and exits with SEAT_UNAVAILABLE. Exactly one winner.');
+      button.disabled = false;
+    });
+
+    const sections = [...document.querySelectorAll('section[id]')];
+    const navLinks = [...document.querySelectorAll('.nav-link')];
+    const revealObserver = new IntersectionObserver(entries => entries.forEach(entry => {
+      if (entry.isIntersecting) entry.target.classList.add('visible');
+    }), { threshold: 0.12 });
+    document.querySelectorAll('.reveal').forEach(item => revealObserver.observe(item));
+
+    const sectionObserver = new IntersectionObserver(entries => entries.forEach(entry => {
+      if (!entry.isIntersecting) return;
+      navLinks.forEach(link => link.classList.toggle('active', link.getAttribute('href') === `#${entry.target.id}`));
+    }), { rootMargin: '-25% 0px -65% 0px' });
+    sections.forEach(section => sectionObserver.observe(section));
+
+    window.addEventListener('scroll', () => {
+      const scrollable = document.documentElement.scrollHeight - window.innerHeight;
+      document.getElementById('progress').style.width = `${scrollable ? (window.scrollY / scrollable) * 100 : 0}%`;
+    }, { passive: true });
+
+    const menuButton = document.getElementById('menuButton');
+    const sidebar = document.getElementById('sidebar');
+    menuButton.addEventListener('click', () => {
+      const open = sidebar.classList.toggle('open');
+      menuButton.setAttribute('aria-expanded', String(open));
+    });
+    navLinks.forEach(link => link.addEventListener('click', () => {
+      sidebar.classList.remove('open');
+      menuButton.setAttribute('aria-expanded', 'false');
+    }));
+  </script>
+</body>
+</html>

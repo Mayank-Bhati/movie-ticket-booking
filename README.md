@@ -112,6 +112,7 @@ gateway and notification sender remain ports with local adapters.
 
 Detailed design:
 
+- [Interactive data flow and concurrency guide](docs/data-flow.html)
 - [System design and runtime flows](docs/architecture/system-design.md)
 - [Data model](docs/architecture/data-model.md)
 - [API reference](docs/api.md)
