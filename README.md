@@ -59,6 +59,9 @@ curl -X POST http://localhost:8080/api/v1/customers \
 ```
 
 Then follow [api.http](api.http) in IntelliJ or VS Code REST Client for the complete booking flow.
+For a click-through demo, import
+[Movie Ticket Booking API.postman_collection.json](postman/Movie%20Ticket%20Booking%20API.postman_collection.json)
+into Postman and run the numbered requests in `1 - Loom Demo Flow` from top to bottom.
 
 ## Run With PostgreSQL
 

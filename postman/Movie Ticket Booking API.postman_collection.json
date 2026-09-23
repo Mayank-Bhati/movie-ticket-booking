@@ -1,0 +1,301 @@
+{
+  "info": {
+    "_postman_id": "5b4fd783-7122-4aaa-92f2-4d8cf6cf12aa",
+    "name": "Movie Ticket Booking API - Loom Demo",
+    "description": "Click-ready collection for demonstrating the Movie Ticket Booking System. Start the application with the demo profile, then run the requests in `1 - Loom Demo Flow` from top to bottom. Response scripts automatically capture all IDs.\n\nStart locally:\n`./mvnw spring-boot:run -Dspring-boot.run.profiles=demo`\n\nSeeded admin: `admin@tickets.local` / `admin12345`\n\nMoney is represented in integer minor units. For INR, `30000` means INR 300.00.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1 - Loom Demo Flow",
+      "description": "Run from top to bottom. The scripts generate a customer and carry IDs into later requests automatically.",
+      "item": [
+        {
+          "name": "01 - Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/actuator/health",
+            "description": "Confirms that the Spring Boot application and database are ready."
+          },
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('Service is healthy', function () {",
+            "  pm.response.to.have.status(200);",
+            "  pm.expect(pm.response.json().status).to.eql('UP');",
+            "});"
+          ], "type": "text/javascript"}}]
+        },
+        {
+          "name": "02 - Register Fresh Demo Customer",
+          "event": [
+            {"listen": "prerequest", "script": {"exec": [
+              "const runId = Date.now().toString();",
+              "pm.collectionVariables.set('demoRunId', runId);",
+              "pm.collectionVariables.set('customerEmail', `loom.demo.${runId}@example.com`);",
+              "pm.collectionVariables.set('idempotencyKey', `loom-booking-${runId}`);"
+            ], "type": "text/javascript"}},
+            {"listen": "test", "script": {"exec": [
+              "pm.test('Customer is created', function () { pm.response.to.have.status(201); });",
+              "const body = pm.response.json();",
+              "pm.collectionVariables.set('customerId', body.id);",
+              "pm.test('Customer ID was captured', function () { pm.expect(body.id).to.be.a('number'); });"
+            ], "type": "text/javascript"}}
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"email\": \"{{customerEmail}}\",\n  \"password\": \"{{customerPassword}}\"\n}", "options": {"raw": {"language": "json"}}},
+            "url": "{{apiUrl}}/customers",
+            "description": "Creates a unique customer on every send and stores the generated email and returned customer ID."
+          }
+        },
+        {
+          "name": "03 - Browse Future Showings",
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('Showings returned', function () { pm.response.to.have.status(200); });",
+            "const showings = pm.response.json();",
+            "pm.expect(showings.length, 'Start the application with the demo profile').to.be.above(0);",
+            "pm.collectionVariables.set('showingId', showings[0].id);",
+            "pm.collectionVariables.set('movieId', showings[0].movieId);"
+          ], "type": "text/javascript"}}],
+          "request": {"method": "GET", "header": [], "url": "{{apiUrl}}/showings", "description": "Returns future scheduled showings and stores the first seeded showing ID."}
+        },
+        {
+          "name": "04 - View Seat Map and Pick Seat",
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('Seat map returned', function () { pm.response.to.have.status(200); });",
+            "const seats = pm.response.json();",
+            "const available = seats.find(seat => seat.status === 'AVAILABLE');",
+            "pm.expect(available, 'At least one seat must be available').to.exist;",
+            "pm.collectionVariables.set('showSeatId', available.showSeatId);",
+            "pm.collectionVariables.set('seatLabel', available.label);",
+            "pm.collectionVariables.set('seatPriceCents', available.priceCents);"
+          ], "type": "text/javascript"}}],
+          "request": {"method": "GET", "header": [], "url": "{{apiUrl}}/showings/{{showingId}}/seats", "description": "Shows live inventory and automatically selects the first AVAILABLE seat."}
+        },
+        {
+          "name": "05 - Hold Selected Seat",
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('Seat hold created', function () { pm.response.to.have.status(201); });",
+            "const hold = pm.response.json();",
+            "pm.collectionVariables.set('holdId', hold.holdId);",
+            "pm.collectionVariables.set('holdExpiresAt', hold.expiresAt);",
+            "pm.test('Seat is actively held', function () { pm.expect(hold.status).to.eql('ACTIVE'); });"
+          ], "type": "text/javascript"}}],
+          "request": {
+            "auth": {"type": "basic", "basic": [{"key": "username", "value": "{{customerEmail}}", "type": "string"}, {"key": "password", "value": "{{customerPassword}}", "type": "string"}]},
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"showingId\": {{showingId}},\n  \"showSeatIds\": [{{showSeatId}}]\n}", "options": {"raw": {"language": "json"}}},
+            "url": "{{apiUrl}}/holds",
+            "description": "Locks and holds the selected seat for the configured hold TTL."
+          }
+        },
+        {
+          "name": "06 - Prove Contention Protection (409)",
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('Second hold is rejected', function () { pm.response.to.have.status(409); });",
+            "pm.test('Stable conflict code returned', function () { pm.expect(pm.response.json().code).to.eql('SEAT_UNAVAILABLE'); });"
+          ], "type": "text/javascript"}}],
+          "request": {
+            "auth": {"type": "basic", "basic": [{"key": "username", "value": "{{customerEmail}}", "type": "string"}, {"key": "password", "value": "{{customerPassword}}", "type": "string"}]},
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"showingId\": {{showingId}},\n  \"showSeatIds\": [{{showSeatId}}]\n}", "options": {"raw": {"language": "json"}}},
+            "url": "{{apiUrl}}/holds",
+            "description": "Attempts to hold the same inventory again and demonstrates the stable concurrency conflict response."
+          }
+        },
+        {
+          "name": "07 - Confirm Booking with WELCOME10",
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('Booking confirmed', function () { pm.response.to.have.status(201); });",
+            "const booking = pm.response.json();",
+            "pm.collectionVariables.set('bookingId', booking.id);",
+            "pm.collectionVariables.set('bookingTotalCents', booking.totalCents);",
+            "pm.test('Discount was applied', function () { pm.expect(booking.discountCents).to.be.above(0); });",
+            "pm.test('Booking is confirmed', function () { pm.expect(booking.status).to.eql('CONFIRMED'); });"
+          ], "type": "text/javascript"}}],
+          "request": {
+            "auth": {"type": "basic", "basic": [{"key": "username", "value": "{{customerEmail}}", "type": "string"}, {"key": "password", "value": "{{customerPassword}}", "type": "string"}]},
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "Idempotency-Key", "value": "{{idempotencyKey}}", "type": "text"}],
+            "body": {"mode": "raw", "raw": "{\n  \"holdId\": \"{{holdId}}\",\n  \"discountCode\": \"WELCOME10\",\n  \"paymentMethod\": \"mock-card\"\n}", "options": {"raw": {"language": "json"}}},
+            "url": "{{apiUrl}}/bookings",
+            "description": "Captures the mock payment, consumes the hold, books the seat, and writes the confirmation outbox event atomically."
+          }
+        },
+        {
+          "name": "08 - Retry Confirmation Idempotently",
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('Retry succeeds', function () { pm.response.to.have.status(201); });",
+            "pm.test('Same booking is returned', function () { pm.expect(pm.response.json().id).to.eql(pm.collectionVariables.get('bookingId')); });"
+          ], "type": "text/javascript"}}],
+          "request": {
+            "auth": {"type": "basic", "basic": [{"key": "username", "value": "{{customerEmail}}", "type": "string"}, {"key": "password", "value": "{{customerPassword}}", "type": "string"}]},
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "Idempotency-Key", "value": "{{idempotencyKey}}", "type": "text"}],
+            "body": {"mode": "raw", "raw": "{\n  \"holdId\": \"{{holdId}}\",\n  \"discountCode\": \"WELCOME10\",\n  \"paymentMethod\": \"mock-card\"\n}", "options": {"raw": {"language": "json"}}},
+            "url": "{{apiUrl}}/bookings",
+            "description": "Repeats the exact confirmation request. The original booking is returned and payment is not captured again."
+          }
+        },
+        {
+          "name": "09 - Get Booking Details",
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('Booking details returned', function () { pm.response.to.have.status(200); });",
+            "pm.test('Requested booking matches', function () { pm.expect(pm.response.json().id).to.eql(pm.collectionVariables.get('bookingId')); });"
+          ], "type": "text/javascript"}}],
+          "request": {
+            "auth": {"type": "basic", "basic": [{"key": "username", "value": "{{customerEmail}}", "type": "string"}, {"key": "password", "value": "{{customerPassword}}", "type": "string"}]},
+            "method": "GET", "header": [], "url": "{{apiUrl}}/bookings/{{bookingId}}",
+            "description": "Returns the complete booking projection with movie, showing, seat labels, totals, and timestamps."
+          }
+        },
+        {
+          "name": "10 - View Booking History",
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('History returned', function () { pm.response.to.have.status(200); });",
+            "pm.test('New booking appears in history', function () { const ids = pm.response.json().map(item => item.id); pm.expect(ids).to.include(pm.collectionVariables.get('bookingId')); });"
+          ], "type": "text/javascript"}}],
+          "request": {
+            "auth": {"type": "basic", "basic": [{"key": "username", "value": "{{customerEmail}}", "type": "string"}, {"key": "password", "value": "{{customerPassword}}", "type": "string"}]},
+            "method": "GET", "header": [], "url": "{{apiUrl}}/bookings",
+            "description": "Lists the authenticated customer's bookings newest first."
+          }
+        },
+        {
+          "name": "11 - Cancel and Refund Booking",
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('Booking cancelled', function () { pm.response.to.have.status(200); });",
+            "const cancellation = pm.response.json();",
+            "pm.collectionVariables.set('refundCents', cancellation.refundCents);",
+            "pm.test('Cancellation state returned', function () { pm.expect(cancellation.status).to.eql('CANCELLED'); });"
+          ], "type": "text/javascript"}}],
+          "request": {
+            "auth": {"type": "basic", "basic": [{"key": "username", "value": "{{customerEmail}}", "type": "string"}, {"key": "password", "value": "{{customerPassword}}", "type": "string"}]},
+            "method": "DELETE", "header": [], "url": "{{apiUrl}}/bookings/{{bookingId}}",
+            "description": "Locks the booking, applies its time-tiered refund policy, releases inventory, and writes the cancellation event."
+          }
+        },
+        {
+          "name": "12 - Verify Seat Released",
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('Seat map returned', function () { pm.response.to.have.status(200); });",
+            "const selectedId = Number(pm.collectionVariables.get('showSeatId'));",
+            "const seat = pm.response.json().find(item => item.showSeatId === selectedId);",
+            "pm.test('Cancelled seat is available again', function () { pm.expect(seat.status).to.eql('AVAILABLE'); });"
+          ], "type": "text/javascript"}}],
+          "request": {"method": "GET", "header": [], "url": "{{apiUrl}}/showings/{{showingId}}/seats", "description": "Completes the demo by proving cancellation returned the selected seat to AVAILABLE."}
+        }
+      ]
+    },
+    {
+      "name": "2 - Browse (Public)",
+      "item": [
+        {"name": "List Cities", "request": {"method": "GET", "header": [], "url": "{{apiUrl}}/cities"}},
+        {"name": "List Movies", "request": {"method": "GET", "header": [], "url": "{{apiUrl}}/movies"}},
+        {"name": "List All Future Showings", "request": {"method": "GET", "header": [], "url": "{{apiUrl}}/showings"}},
+        {"name": "Filter Showings by City and Movie", "request": {"method": "GET", "header": [], "url": {"raw": "{{apiUrl}}/showings?cityId={{cityId}}&movieId={{movieId}}", "host": ["{{apiUrl}}"], "path": ["showings"], "query": [{"key": "cityId", "value": "{{cityId}}"}, {"key": "movieId", "value": "{{movieId}}"}]}}},
+        {"name": "View Showing Seats", "request": {"method": "GET", "header": [], "url": "{{apiUrl}}/showings/{{showingId}}/seats"}}
+      ]
+    },
+    {
+      "name": "3 - Admin Setup",
+      "description": "Optional full catalog creation flow. Run top to bottom against a fresh database or use the generated unique names.",
+      "item": [
+        {
+          "name": "01 - Create City",
+          "event": [
+            {"listen": "prerequest", "script": {"exec": ["pm.collectionVariables.set('adminRunId', Date.now().toString());"], "type": "text/javascript"}},
+            {"listen": "test", "script": {"exec": ["pm.test('City created', () => pm.response.to.have.status(201));", "pm.collectionVariables.set('cityId', pm.response.json().id);"], "type": "text/javascript"}}
+          ],
+          "request": {"auth": {"type": "basic", "basic": [{"key": "username", "value": "{{adminEmail}}", "type": "string"}, {"key": "password", "value": "{{adminPassword}}", "type": "string"}]}, "method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\n  \"name\": \"Demo City {{adminRunId}}\",\n  \"timezone\": \"Asia/Kolkata\"\n}", "options": {"raw": {"language": "json"}}}, "url": "{{apiUrl}}/admin/cities"}
+        },
+        {
+          "name": "02 - Create Theater",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('Theater created', () => pm.response.to.have.status(201));", "pm.collectionVariables.set('theaterId', pm.response.json().id);"], "type": "text/javascript"}}],
+          "request": {"auth": {"type": "basic", "basic": [{"key": "username", "value": "{{adminEmail}}", "type": "string"}, {"key": "password", "value": "{{adminPassword}}", "type": "string"}]}, "method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\n  \"cityId\": {{cityId}},\n  \"name\": \"Loom Cinema\",\n  \"address\": \"100 Demo Avenue\"\n}", "options": {"raw": {"language": "json"}}}, "url": "{{apiUrl}}/admin/theaters"}
+        },
+        {
+          "name": "03 - Create Screen and Layout",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('Screen created', () => pm.response.to.have.status(201));", "pm.collectionVariables.set('screenId', pm.response.json().id);"], "type": "text/javascript"}}],
+          "request": {"auth": {"type": "basic", "basic": [{"key": "username", "value": "{{adminEmail}}", "type": "string"}, {"key": "password", "value": "{{adminPassword}}", "type": "string"}]}, "method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\n  \"theaterId\": {{theaterId}},\n  \"name\": \"Screen 1\",\n  \"rows\": 6,\n  \"seatsPerRow\": 8,\n  \"premiumRows\": [5, 6]\n}", "options": {"raw": {"language": "json"}}}, "url": "{{apiUrl}}/admin/screens"}
+        },
+        {
+          "name": "04 - Create Movie",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('Movie created', () => pm.response.to.have.status(201));", "pm.collectionVariables.set('movieId', pm.response.json().id);"], "type": "text/javascript"}}],
+          "request": {"auth": {"type": "basic", "basic": [{"key": "username", "value": "{{adminEmail}}", "type": "string"}, {"key": "password", "value": "{{adminPassword}}", "type": "string"}]}, "method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\n  \"title\": \"Concurrency at Midnight\",\n  \"durationMinutes\": 128,\n  \"certificate\": \"U/A\",\n  \"language\": \"English\"\n}", "options": {"raw": {"language": "json"}}}, "url": "{{apiUrl}}/admin/movies"}
+        },
+        {
+          "name": "05 - Create Refund Policy",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('Refund policy created', () => pm.response.to.have.status(201));", "pm.collectionVariables.set('refundPolicyId', pm.response.json().id);"], "type": "text/javascript"}}],
+          "request": {"auth": {"type": "basic", "basic": [{"key": "username", "value": "{{adminEmail}}", "type": "string"}, {"key": "password", "value": "{{adminPassword}}", "type": "string"}]}, "method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\n  \"name\": \"Loom Policy {{adminRunId}}\",\n  \"rules\": [\n    {\"minimumMinutesBefore\": 0, \"refundPercent\": 0},\n    {\"minimumMinutesBefore\": 120, \"refundPercent\": 50},\n    {\"minimumMinutesBefore\": 1440, \"refundPercent\": 100}\n  ]\n}", "options": {"raw": {"language": "json"}}}, "url": "{{apiUrl}}/admin/refund-policies"}
+        },
+        {
+          "name": "06 - Create Future Showing",
+          "event": [
+            {"listen": "prerequest", "script": {"exec": ["const startsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);", "startsAt.setUTCHours(14, 0, 0, 0);", "pm.collectionVariables.set('newShowingStartsAt', startsAt.toISOString());"], "type": "text/javascript"}},
+            {"listen": "test", "script": {"exec": ["pm.test('Showing created', () => pm.response.to.have.status(201));", "pm.collectionVariables.set('showingId', pm.response.json().id);"], "type": "text/javascript"}}
+          ],
+          "request": {"auth": {"type": "basic", "basic": [{"key": "username", "value": "{{adminEmail}}", "type": "string"}, {"key": "password", "value": "{{adminPassword}}", "type": "string"}]}, "method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\n  \"movieId\": {{movieId}},\n  \"screenId\": {{screenId}},\n  \"refundPolicyId\": {{refundPolicyId}},\n  \"startsAt\": \"{{newShowingStartsAt}}\",\n  \"basePriceCents\": 30000,\n  \"weekendMultiplierBps\": 12500\n}", "options": {"raw": {"language": "json"}}}, "url": "{{apiUrl}}/admin/showings"}
+        },
+        {
+          "name": "07 - Create Discount Code",
+          "event": [{"listen": "prerequest", "script": {"exec": ["pm.collectionVariables.set('newDiscountCode', `LOOM${pm.collectionVariables.get('adminRunId')}`);", "pm.collectionVariables.set('discountValidFrom', new Date(Date.now() - 60000).toISOString());", "pm.collectionVariables.set('discountValidUntil', new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString());"], "type": "text/javascript"}}],
+          "request": {"auth": {"type": "basic", "basic": [{"key": "username", "value": "{{adminEmail}}", "type": "string"}, {"key": "password", "value": "{{adminPassword}}", "type": "string"}]}, "method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\n  \"code\": \"{{newDiscountCode}}\",\n  \"kind\": \"PERCENT\",\n  \"valueAmount\": 15,\n  \"minimumOrderCents\": 0,\n  \"validFrom\": \"{{discountValidFrom}}\",\n  \"validUntil\": \"{{discountValidUntil}}\",\n  \"maxRedemptions\": 100\n}", "options": {"raw": {"language": "json"}}}, "url": "{{apiUrl}}/admin/discount-codes"}
+        }
+      ]
+    },
+    {
+      "name": "4 - Failure Cases",
+      "item": [
+        {
+          "name": "Admin Without Authentication (401)",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('Authentication is required', () => pm.response.to.have.status(401));"], "type": "text/javascript"}}],
+          "request": {"auth": {"type": "noauth"}, "method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\n  \"name\": \"Forbidden City\",\n  \"timezone\": \"Asia/Kolkata\"\n}", "options": {"raw": {"language": "json"}}}, "url": "{{apiUrl}}/admin/cities"}
+        },
+        {
+          "name": "Invalid Registration (400)",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('Validation fails', () => pm.response.to.have.status(400));", "pm.test('Stable validation code', () => pm.expect(pm.response.json().code).to.eql('VALIDATION_FAILED'));"], "type": "text/javascript"}}],
+          "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\n  \"email\": \"not-an-email\",\n  \"password\": \"short\"\n}", "options": {"raw": {"language": "json"}}}, "url": "{{apiUrl}}/customers"}
+        },
+        {
+          "name": "Payment Declined (409)",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('Payment is declined', () => pm.response.to.have.status(409));", "pm.test('Stable decline code', () => pm.expect(pm.response.json().code).to.eql('PAYMENT_DECLINED'));"], "type": "text/javascript"}}],
+          "request": {"auth": {"type": "basic", "basic": [{"key": "username", "value": "{{customerEmail}}", "type": "string"}, {"key": "password", "value": "{{customerPassword}}", "type": "string"}]}, "method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "Idempotency-Key", "value": "decline-{{demoRunId}}", "type": "text"}], "body": {"mode": "raw", "raw": "{\n  \"holdId\": \"{{holdId}}\",\n  \"paymentMethod\": \"decline\"\n}", "options": {"raw": {"language": "json"}}}, "url": "{{apiUrl}}/bookings", "description": "Run against an active hold before confirming it successfully. The transaction rolls back and the hold remains retryable."}
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {"key": "baseUrl", "value": "http://localhost:8080", "type": "string"},
+    {"key": "apiUrl", "value": "{{baseUrl}}/api/v1", "type": "string"},
+    {"key": "adminEmail", "value": "admin@tickets.local", "type": "string"},
+    {"key": "adminPassword", "value": "admin12345", "type": "string"},
+    {"key": "customerEmail", "value": "loom.demo@example.com", "type": "string"},
+    {"key": "customerPassword", "value": "customer123", "type": "string"},
+    {"key": "demoRunId", "value": "", "type": "string"},
+    {"key": "customerId", "value": "", "type": "string"},
+    {"key": "cityId", "value": "1", "type": "string"},
+    {"key": "theaterId", "value": "", "type": "string"},
+    {"key": "screenId", "value": "", "type": "string"},
+    {"key": "movieId", "value": "1", "type": "string"},
+    {"key": "refundPolicyId", "value": "", "type": "string"},
+    {"key": "showingId", "value": "1", "type": "string"},
+    {"key": "showSeatId", "value": "", "type": "string"},
+    {"key": "seatLabel", "value": "", "type": "string"},
+    {"key": "seatPriceCents", "value": "", "type": "string"},
+    {"key": "holdId", "value": "", "type": "string"},
+    {"key": "holdExpiresAt", "value": "", "type": "string"},
+    {"key": "idempotencyKey", "value": "", "type": "string"},
+    {"key": "bookingId", "value": "", "type": "string"},
+    {"key": "bookingTotalCents", "value": "", "type": "string"},
+    {"key": "refundCents", "value": "", "type": "string"},
+    {"key": "adminRunId", "value": "", "type": "string"},
+    {"key": "newShowingStartsAt", "value": "", "type": "string"},
+    {"key": "newDiscountCode", "value": "", "type": "string"},
+    {"key": "discountValidFrom", "value": "", "type": "string"},
+    {"key": "discountValidUntil", "value": "", "type": "string"}
+  ]
+}
