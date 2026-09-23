@@ -6,6 +6,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 import com.mayankbhati.movietickets.identity.domain.UserAccount;
 
-interface UserAccountRepository extends JpaRepository<UserAccount, Long> {
+public interface UserAccountRepository extends JpaRepository<UserAccount, Long> {
     Optional<UserAccount> findByEmailIgnoreCase(String email);
 }

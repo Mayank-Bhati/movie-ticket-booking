@@ -28,7 +28,7 @@ flowchart TB
       BS --> OB[Outbox service]
       RS[Reminder scheduler] --> OB
       OD[Outbox dispatcher] --> NS[Notification sender port]
-      IS --> JPA[JPA persistence adapters]
+      IS --> JPA[Spring Data repositories]
       CS --> JPA
       BS --> JPA
       OB --> JPA

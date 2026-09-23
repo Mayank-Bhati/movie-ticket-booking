@@ -106,8 +106,9 @@ flowchart LR
 
 Code is grouped by business capability, then by adapter/application/domain responsibility. The
 booking application service owns the atomic transaction that converts a hold into a paid booking;
-JPA persistence adapters isolate Hibernate queries and locks from use-case orchestration, while the
-payment gateway and notification sender remain ports with local adapters.
+Spring Data repositories generate routine persistence operations from method names. `@EntityGraph`
+defines fetch plans and `@Lock` makes the few consistency-critical locks explicit, while the payment
+gateway and notification sender remain ports with local adapters.
 
 Detailed design:
 
@@ -120,10 +121,10 @@ Detailed design:
 
 ```text
 src/main/java/com/mayankbhati/movietickets/
-  identity/       accounts, current actor, security and JPA persistence
-  catalog/        catalog entities, use cases and JPA read/write adapters
-  booking/        booking aggregates, use cases, locking adapter and payment port
-  notification/   outbox entity, persistence adapter, producer and dispatcher
+  identity/       accounts, current actor, security and Spring Data repository
+  catalog/        catalog entities, use cases and Spring Data repositories
+  booking/        booking aggregates, repositories, use cases and payment port
+  notification/   outbox entity/repository, producer and dispatcher
   shared/         API errors and shared runtime configuration
 src/main/resources/db/migration/   versioned database schema
 src/test/java/                     integration and concurrency tests

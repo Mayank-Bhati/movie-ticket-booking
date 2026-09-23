@@ -4,6 +4,7 @@ import java.time.Clock;
 import java.time.OffsetDateTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -14,12 +15,12 @@ import com.mayankbhati.movietickets.notification.domain.OutboxEvent;
 @Component
 class OutboxDispatcher {
     private static final Logger LOGGER = LoggerFactory.getLogger(OutboxDispatcher.class);
-    private final OutboxStore store;
+    private final OutboxEventRepository events;
     private final NotificationSender sender;
     private final Clock clock;
 
-    OutboxDispatcher(OutboxStore store, NotificationSender sender, Clock clock) {
-        this.store = store;
+    OutboxDispatcher(OutboxEventRepository events, NotificationSender sender, Clock clock) {
+        this.events = events;
         this.sender = sender;
         this.clock = clock;
     }
@@ -28,7 +29,8 @@ class OutboxDispatcher {
     @Transactional
     void dispatch() {
         OffsetDateTime now = OffsetDateTime.now(clock);
-        for (OutboxEvent event : store.lockPendingBatch(now, 25)) {
+        for (OutboxEvent event : events.findByStatusAndAvailableAtLessThanEqualOrderByIdAsc(
+                "PENDING", now, PageRequest.of(0, 25))) {
             try {
                 sender.send(event.getEventType(), event.getPayload());
                 event.markSent(now);

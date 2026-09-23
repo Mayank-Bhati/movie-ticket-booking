@@ -10,16 +10,16 @@ import org.springframework.transaction.annotation.Transactional;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mayankbhati.movietickets.notification.domain.OutboxEvent;
-import com.mayankbhati.movietickets.notification.infrastructure.OutboxStore;
+import com.mayankbhati.movietickets.notification.infrastructure.OutboxEventRepository;
 
 @Service
 public class OutboxService {
-    private final OutboxStore store;
+    private final OutboxEventRepository events;
     private final ObjectMapper objectMapper;
     private final Clock clock;
 
-    public OutboxService(OutboxStore store, ObjectMapper objectMapper, Clock clock) {
-        this.store = store;
+    public OutboxService(OutboxEventRepository events, ObjectMapper objectMapper, Clock clock) {
+        this.events = events;
         this.objectMapper = objectMapper;
         this.clock = clock;
     }
@@ -28,8 +28,8 @@ public class OutboxService {
     public void enqueue(String aggregateId, String eventType, Object payload, String dedupeKey) {
         try {
             OffsetDateTime now = OffsetDateTime.now(clock);
-            if (!store.exists(dedupeKey)) {
-                store.save(new OutboxEvent(aggregateId, eventType,
+            if (!events.existsByDedupeKey(dedupeKey)) {
+                events.save(new OutboxEvent(aggregateId, eventType,
                         objectMapper.writeValueAsString(payload), now, dedupeKey));
             }
         } catch (JsonProcessingException exception) {

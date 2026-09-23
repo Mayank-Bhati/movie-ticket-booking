@@ -45,6 +45,7 @@ public class ShowSeat {
         this.priceCents = priceCents; this.status = "AVAILABLE";
     }
     public Long getId() { return id; }
+    public Showing getShowing() { return showing; }
     public Seat getSeat() { return seat; }
     public String getCategory() { return category; }
     public long getPriceCents() { return priceCents; }
