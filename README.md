@@ -11,7 +11,7 @@ service class.
 ## Highlights
 
 - Seat-level inventory materialized per showing.
-- Ordered `SELECT ... FOR UPDATE` locking prevents double allocation.
+- Ordered JPA `PESSIMISTIC_WRITE` locking prevents double allocation.
 - Five-minute holds are reclaimed lazily and by a scheduled sweeper.
 - Idempotency keys make booking retries safe.
 - Regular, premium, and local-weekend pricing is snapshotted when a showing is created.
@@ -20,6 +20,7 @@ service class.
 - Confirmation, cancellation, and reminder events use a transactional outbox.
 - Database-backed HTTP Basic authentication with `ADMIN` and `CUSTOMER` authorization.
 - H2 for a zero-setup demo/tests and PostgreSQL support for a durable local database.
+- Hibernate/JPA persistence with Flyway-owned schema validation and Open Session in View disabled.
 
 ## Quick Start
 
@@ -105,7 +106,8 @@ flowchart LR
 
 Code is grouped by business capability, then by adapter/application/domain responsibility. The
 booking application service owns the atomic transaction that converts a hold into a paid booking;
-the payment gateway and notification sender are ports with local adapters.
+JPA persistence adapters isolate Hibernate queries and locks from use-case orchestration, while the
+payment gateway and notification sender remain ports with local adapters.
 
 Detailed design:
 
@@ -118,10 +120,10 @@ Detailed design:
 
 ```text
 src/main/java/com/mayankbhati/movietickets/
-  identity/       accounts, current actor, security adapter
-  catalog/        cities, venues, layouts, movies, show inventory, pricing
-  booking/        holds, confirmation, payment port, cancellation and expiry
-  notification/   transactional outbox, reminder producer and dispatcher
+  identity/       accounts, current actor, security and JPA persistence
+  catalog/        catalog entities, use cases and JPA read/write adapters
+  booking/        booking aggregates, use cases, locking adapter and payment port
+  notification/   outbox entity, persistence adapter, producer and dispatcher
   shared/         API errors and shared runtime configuration
 src/main/resources/db/migration/   versioned database schema
 src/test/java/                     integration and concurrency tests
@@ -132,7 +134,8 @@ docs/architecture/                 system design, data model and ADRs
 
 1. One `show_seat` row is the source of truth for one physical seat in one showing.
 2. A seat row can be `AVAILABLE`, `HELD`, or `BOOKED`; transitions occur inside transactions.
-3. Contested seats are locked in ascending ID order to serialize writers and reduce deadlocks.
+3. Contested seats are locked with `PESSIMISTIC_WRITE` in ascending ID order to serialize writers
+   and reduce deadlocks.
 4. A booking can only consume an active, unexpired hold owned by the authenticated customer.
 5. `(customer_id, idempotency_key)` is unique, so a retried confirmation returns the first result.
 6. Booking state and notification intent commit together through the outbox table.

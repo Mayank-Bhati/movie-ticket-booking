@@ -16,7 +16,7 @@ design discussions and implementation reviews:
 
 Tools used during this process:
 
-- Java 21, Spring Boot, Spring JDBC, Spring Security, Flyway, H2, and PostgreSQL.
+- Java 21, Spring Boot, Spring Data JPA/Hibernate, Spring Security, Flyway, H2, and PostgreSQL.
 - JUnit, MockMvc, AssertJ, and JaCoCo for testing and coverage.
 - Maven and Git for builds and version control.
 - AI-assisted requirement analysis, architecture discussion, implementation drafting, and review.

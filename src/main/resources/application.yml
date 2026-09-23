@@ -1,4 +1,14 @@
 spring:
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          batch_size: 50
+        order_inserts: true
+        order_updates: true
   application:
     name: movie-ticket-booking
   datasource:
@@ -23,4 +33,3 @@ booking:
   hold-ttl: ${HOLD_TTL:PT5M}
   expiry-sweep-delay-ms: ${HOLD_SWEEP_DELAY_MS:30000}
   outbox-dispatch-delay-ms: ${OUTBOX_DELAY_MS:2000}
-

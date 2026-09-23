@@ -21,19 +21,21 @@ C4Context
 ```mermaid
 flowchart TB
     subgraph Runtime[Spring Boot modular monolith]
-      IA[Identity API] --> IS[Identity service/store]
-      CA[Catalog API] --> CS[Catalog service/store]
+      IA[Identity API] --> IS[Identity service]
+      CA[Catalog API] --> CS[Catalog service]
       BA[Booking API] --> BS[Booking service]
       BS --> PG[Payment gateway port]
       BS --> OB[Outbox service]
       RS[Reminder scheduler] --> OB
       OD[Outbox dispatcher] --> NS[Notification sender port]
+      IS --> JPA[JPA persistence adapters]
+      CS --> JPA
+      BS --> JPA
+      OB --> JPA
+      OD --> JPA
     end
-    IS --> DB[(Relational database)]
-    CS --> DB
-    BS --> DB
-    OB --> DB
-    OD --> DB
+    JPA --> H[Hibernate]
+    H --> DB[(Relational database)]
 ```
 
 This is a single deployable process and one relational database. Feature packaging preserves clear
@@ -49,7 +51,7 @@ sequenceDiagram
     participant DB as Database
     C->>B: POST /holds (showing, seat IDs)
     B->>DB: Release expired holds
-    B->>DB: SELECT show_seat ORDER BY id FOR UPDATE
+    B->>DB: JPA PESSIMISTIC_WRITE, ordered by inventory ID
     alt every seat is AVAILABLE
       B->>DB: Insert hold + items
       B->>DB: Mark seats HELD with expiry
@@ -107,4 +109,3 @@ PostgreSQL; row locks remain the serialization point. The next practical steps w
 read caching for catalog queries, partitioning old showing inventory, and a dedicated outbox worker.
 External payment would require a pending-payment state plus webhook reconciliation. These are
 documented paths, not partially implemented distributed machinery.
-

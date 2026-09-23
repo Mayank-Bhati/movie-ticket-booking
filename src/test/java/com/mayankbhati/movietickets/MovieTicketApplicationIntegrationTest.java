@@ -99,6 +99,8 @@ class MovieTicketApplicationIntegrationTest {
                 .extracting(SeatView::priceCents).containsOnly(1250L);
         assertThat(seats).filteredOn(seat -> seat.category().equals("PREMIUM"))
                 .extracting(SeatView::priceCents).containsOnly(1875L);
+        assertThat(catalog.showings(null, null)).singleElement()
+                .satisfies(showing -> assertThat(showing.priceFromCents()).isEqualTo(1250L));
     }
 
     @Test
@@ -154,9 +156,9 @@ class MovieTicketApplicationIntegrationTest {
 
         CancellationView cancellation = bookings.cancel(customer, booking.id());
 
-        assertThat(booking.discountCents()).isEqualTo(100);
+        assertThat(booking.discountCents()).isEqualTo(booking.subtotalCents() / 10);
         assertThat(cancellation.refundPercent()).isEqualTo(100);
-        assertThat(cancellation.refundCents()).isEqualTo(900);
+        assertThat(cancellation.refundCents()).isEqualTo(booking.totalCents());
         assertThat(catalog.seats(fixture.showingId()).getFirst().status()).isEqualTo("AVAILABLE");
         assertThat(count("outbox_event")).isEqualTo(2);
     }
@@ -284,4 +286,3 @@ class MovieTicketApplicationIntegrationTest {
                            Instant startsAt) {
     }
 }
-

@@ -4,8 +4,9 @@ Status: Accepted
 
 ## Decision
 
-Materialize one inventory row per showing/seat and lock requested rows with `SELECT ... FOR UPDATE`
-in ascending ID order before changing availability.
+Materialize one inventory row per showing/seat and lock requested rows with JPA
+`LockModeType.PESSIMISTIC_WRITE` in ascending ID order before changing availability. Hibernate
+translates that lock mode to the database's row-locking syntax.
 
 ## Rationale
 
@@ -15,4 +16,3 @@ reduces deadlock risk, while integration tests verify one winner under concurren
 
 Optimistic locking was rejected because popular shows would create avoidable retries and a more
 complex multi-seat rollback path.
-
