@@ -6,6 +6,7 @@ import java.time.OffsetDateTime;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -69,84 +70,30 @@ public class BookingService {
 
     @Transactional
     public HoldView createHold(Actor customer, long showingId, List<Long> requestedSeatIds) {
-        LinkedHashSet<Long> uniqueSeatIds = new LinkedHashSet<>(requestedSeatIds);
-        if (uniqueSeatIds.isEmpty() || uniqueSeatIds.size() > 10) {
-            throw ApiException.badRequest("INVALID_SEAT_COUNT", "Select between 1 and 10 unique seats");
-        }
+        LinkedHashSet<Long> uniqueSeatIds = validateSeatSelection(requestedSeatIds);
         OffsetDateTime now = OffsetDateTime.now(clock);
         releaseExpiredHolds(now);
-        Showing showing = showings.findById(showingId)
-                .orElseThrow(() -> ApiException.notFound("SHOWING_NOT_FOUND", "Showing not found"));
-        if (!"SCHEDULED".equals(showing.getStatus()) || !showing.getStartsAt().isAfter(now)) {
-            throw ApiException.conflict("SHOWING_UNAVAILABLE", "The showing is no longer bookable");
-        }
-
-        List<ShowSeat> seats = inventory.findByShowingIdAndIdInOrderByIdAsc(showingId, uniqueSeatIds);
-        if (seats.size() != uniqueSeatIds.size()) {
-            throw ApiException.notFound("SEAT_NOT_FOUND", "One or more seats do not belong to this showing");
-        }
-        List<String> unavailable = seats.stream().filter(seat -> !"AVAILABLE".equals(seat.getStatus()))
-                .map(seat -> seat.getSeat().label()).toList();
-        if (!unavailable.isEmpty()) {
-            throw ApiException.conflict("SEAT_UNAVAILABLE", "Seats are no longer available: " + unavailable);
-        }
-
-        String holdId = UUID.randomUUID().toString();
-        OffsetDateTime expiresAt = now.plus(holdTtl);
-        SeatHold hold = new SeatHold(holdId, customer.id(), showing, expiresAt, now);
-        seats.forEach(seat -> {
-            hold.addItem(seat);
-            seat.hold(holdId, expiresAt);
-        });
+        Showing showing = requireBookableShowing(showingId, now);
+        List<ShowSeat> seats = lockAvailableSeats(showingId, uniqueSeatIds);
+        SeatHold hold = buildHold(customer.id(), showing, seats, now);
         holds.save(hold);
-        return new HoldView(holdId, showingId, labels(seats), subtotal(seats), expiresAt, "ACTIVE");
+        return toHoldView(hold, seats);
     }
 
     @Transactional
     public BookingView confirm(Actor customer, String holdId, String discountCode,
                                String paymentMethod, String idempotencyKey) {
-        var existing = bookings.findByCustomerIdAndIdempotencyKey(customer.id(), idempotencyKey);
-        if (existing.isPresent()) {
-            return booking(customer.id(), existing.get().getId());
-        }
-        SeatHold hold = holds.findLockedById(holdId)
-                .orElseThrow(() -> ApiException.notFound("HOLD_NOT_FOUND", "Hold not found"));
-        if (hold.getCustomerId() != customer.id()) {
-            throw ApiException.notFound("HOLD_NOT_FOUND", "Hold not found");
-        }
+        Optional<BookingView> existing = findExistingBooking(customer.id(), idempotencyKey);
+        if (existing.isPresent()) return existing.get();
+
         OffsetDateTime now = OffsetDateTime.now(clock);
-        if (!"ACTIVE".equals(hold.getStatus()) || !hold.getExpiresAt().isAfter(now)) {
-            expireHold(hold);
-            throw ApiException.gone("HOLD_EXPIRED", "The seat hold has expired");
-        }
-        List<ShowSeat> seats = inventory.findByHoldIdOrderByIdAsc(holdId);
-        if (seats.isEmpty() || seats.stream().anyMatch(seat -> !"HELD".equals(seat.getStatus()))) {
-            throw ApiException.conflict("HOLD_INVALID", "The held inventory is no longer valid");
-        }
-
-        long subtotal = subtotal(seats);
-        DiscountCode discount = discountCode == null || discountCode.isBlank()
-                ? null : lockAndValidateDiscount(discountCode, subtotal, now);
-        long discountAmount = discount == null ? 0 : discount.discountFor(subtotal);
-        long total = subtotal - discountAmount;
-        PaymentGateway.PaymentReceipt receipt = payments.capture(total, "INR", paymentMethod,
-                customer.id() + ":" + idempotencyKey);
-
-        String bookingId = UUID.randomUUID().toString();
-        Booking booking = new Booking(bookingId, customer.id(), hold.getShowing(), hold, idempotencyKey,
-                subtotal, discountAmount, discount == null ? null : discount.getCode(), now);
-        seats.forEach(seat -> {
-            booking.addItem(seat);
-            seat.book(bookingId);
-        });
-        hold.convert();
-        if (discount != null) discount.redeem();
-        bookings.save(booking);
-        paymentRecords.save(new Payment(UUID.randomUUID().toString(), booking, total, receipt.reference(), now));
-        outbox.enqueue(bookingId, "BOOKING_CONFIRMED",
-                Map.of("bookingId", bookingId, "email", customer.email(),
-                        "seatLabels", labels(seats), "totalCents", total),
-                "booking-confirmed:" + bookingId);
+        SeatHold hold = lockActiveHold(holdId, customer.id(), now);
+        List<ShowSeat> seats = lockHeldSeats(holdId);
+        Price price = calculatePrice(seats, discountCode, now);
+        PaymentGateway.PaymentReceipt receipt = capturePayment(customer.id(), idempotencyKey, paymentMethod, price);
+        Booking booking = buildBooking(customer.id(), idempotencyKey, hold, seats, price, now);
+        completeBooking(booking, hold, seats, price.discount(), receipt, now);
+        enqueueConfirmation(booking, customer.email(), seats);
         return toView(booking);
     }
 
@@ -167,41 +114,168 @@ public class BookingService {
 
     @Transactional
     public CancellationView cancel(Actor customer, String bookingId) {
+        Booking booking = lockCancellableBooking(bookingId, customer.id());
+        OffsetDateTime now = OffsetDateTime.now(clock);
+        RefundQuote quote = calculateRefund(booking, now);
+        processCancellation(booking, quote, now);
+        enqueueCancellation(bookingId, customer.email(), quote);
+        return new CancellationView(bookingId, "CANCELLED", quote.amount(), quote.percent(), "INR");
+    }
+
+    @Transactional
+    public int releaseExpiredHolds() {
+        return releaseExpiredHolds(OffsetDateTime.now(clock));
+    }
+
+    private LinkedHashSet<Long> validateSeatSelection(List<Long> requestedSeatIds) {
+        LinkedHashSet<Long> uniqueSeatIds = new LinkedHashSet<>(requestedSeatIds);
+        if (uniqueSeatIds.isEmpty() || uniqueSeatIds.size() > 10) {
+            throw ApiException.badRequest("INVALID_SEAT_COUNT", "Select between 1 and 10 unique seats");
+        }
+        return uniqueSeatIds;
+    }
+
+    private Showing requireBookableShowing(long showingId, OffsetDateTime now) {
+        Showing showing = showings.findById(showingId)
+                .orElseThrow(() -> ApiException.notFound("SHOWING_NOT_FOUND", "Showing not found"));
+        if (!"SCHEDULED".equals(showing.getStatus()) || !showing.getStartsAt().isAfter(now)) {
+            throw ApiException.conflict("SHOWING_UNAVAILABLE", "The showing is no longer bookable");
+        }
+        return showing;
+    }
+
+    private List<ShowSeat> lockAvailableSeats(long showingId, LinkedHashSet<Long> requestedSeatIds) {
+        List<ShowSeat> seats = inventory.findByShowingIdAndIdInOrderByIdAsc(showingId, requestedSeatIds);
+        if (seats.size() != requestedSeatIds.size()) {
+            throw ApiException.notFound("SEAT_NOT_FOUND", "One or more seats do not belong to this showing");
+        }
+        List<String> unavailable = seats.stream().filter(seat -> !"AVAILABLE".equals(seat.getStatus()))
+                .map(seat -> seat.getSeat().label()).toList();
+        if (!unavailable.isEmpty()) {
+            throw ApiException.conflict("SEAT_UNAVAILABLE", "Seats are no longer available: " + unavailable);
+        }
+        return seats;
+    }
+
+    private SeatHold buildHold(long customerId, Showing showing, List<ShowSeat> seats, OffsetDateTime now) {
+        String holdId = UUID.randomUUID().toString();
+        OffsetDateTime expiresAt = now.plus(holdTtl);
+        SeatHold hold = new SeatHold(holdId, customerId, showing, expiresAt, now);
+        seats.forEach(seat -> {
+            hold.addItem(seat);
+            seat.hold(holdId, expiresAt);
+        });
+        return hold;
+    }
+
+    private HoldView toHoldView(SeatHold hold, List<ShowSeat> seats) {
+        return new HoldView(hold.getId(), hold.getShowing().getId(), labels(seats), subtotal(seats),
+                hold.getExpiresAt(), hold.getStatus());
+    }
+
+    private Optional<BookingView> findExistingBooking(long customerId, String idempotencyKey) {
+        return bookings.findByCustomerIdAndIdempotencyKey(customerId, idempotencyKey)
+                .map(existing -> booking(customerId, existing.getId()));
+    }
+
+    private SeatHold lockActiveHold(String holdId, long customerId, OffsetDateTime now) {
+        SeatHold hold = holds.findLockedById(holdId)
+                .orElseThrow(() -> ApiException.notFound("HOLD_NOT_FOUND", "Hold not found"));
+        if (hold.getCustomerId() != customerId) {
+            throw ApiException.notFound("HOLD_NOT_FOUND", "Hold not found");
+        }
+        if (!"ACTIVE".equals(hold.getStatus()) || !hold.getExpiresAt().isAfter(now)) {
+            expireHold(hold);
+            throw ApiException.gone("HOLD_EXPIRED", "The seat hold has expired");
+        }
+        return hold;
+    }
+
+    private List<ShowSeat> lockHeldSeats(String holdId) {
+        List<ShowSeat> seats = inventory.findByHoldIdOrderByIdAsc(holdId);
+        if (seats.isEmpty() || seats.stream().anyMatch(seat -> !"HELD".equals(seat.getStatus()))) {
+            throw ApiException.conflict("HOLD_INVALID", "The held inventory is no longer valid");
+        }
+        return seats;
+    }
+
+    private Price calculatePrice(List<ShowSeat> seats, String discountCode, OffsetDateTime now) {
+        long subtotal = subtotal(seats);
+        DiscountCode discount = discountCode == null || discountCode.isBlank()
+                ? null : lockAndValidateDiscount(discountCode, subtotal, now);
+        long discountAmount = discount == null ? 0 : discount.discountFor(subtotal);
+        return new Price(subtotal, discountAmount, subtotal - discountAmount, discount);
+    }
+
+    private PaymentGateway.PaymentReceipt capturePayment(long customerId, String idempotencyKey,
+                                                          String paymentMethod, Price price) {
+        return payments.capture(price.total(), "INR", paymentMethod, customerId + ":" + idempotencyKey);
+    }
+
+    private Booking buildBooking(long customerId, String idempotencyKey, SeatHold hold,
+                                 List<ShowSeat> seats, Price price, OffsetDateTime now) {
+        Booking booking = new Booking(UUID.randomUUID().toString(), customerId, hold.getShowing(), hold,
+                idempotencyKey, price.subtotal(), price.discountAmount(), price.discountCode(), now);
+        seats.forEach(booking::addItem);
+        return booking;
+    }
+
+    private void completeBooking(Booking booking, SeatHold hold, List<ShowSeat> seats,
+                                 DiscountCode discount, PaymentGateway.PaymentReceipt receipt,
+                                 OffsetDateTime now) {
+        seats.forEach(seat -> seat.book(booking.getId()));
+        hold.convert();
+        if (discount != null) discount.redeem();
+        bookings.save(booking);
+        paymentRecords.save(new Payment(UUID.randomUUID().toString(), booking, booking.getTotalCents(),
+                receipt.reference(), now));
+    }
+
+    private void enqueueConfirmation(Booking booking, String email, List<ShowSeat> seats) {
+        outbox.enqueue(booking.getId(), "BOOKING_CONFIRMED",
+                Map.of("bookingId", booking.getId(), "email", email,
+                        "seatLabels", labels(seats), "totalCents", booking.getTotalCents()),
+                "booking-confirmed:" + booking.getId());
+    }
+
+    private Booking lockCancellableBooking(String bookingId, long customerId) {
         Booking booking = bookings.findLockedById(bookingId)
                 .orElseThrow(() -> ApiException.notFound("BOOKING_NOT_FOUND", "Booking not found"));
-        if (booking.getCustomerId() != customer.id()) {
+        if (booking.getCustomerId() != customerId) {
             throw ApiException.notFound("BOOKING_NOT_FOUND", "Booking not found");
         }
         if (!"CONFIRMED".equals(booking.getStatus())) {
             throw ApiException.conflict("BOOKING_ALREADY_CANCELLED", "Booking is already cancelled");
         }
+        return booking;
+    }
 
-        OffsetDateTime now = OffsetDateTime.now(clock);
+    private RefundQuote calculateRefund(Booking booking, OffsetDateTime now) {
         long minutesBefore = Math.max(0, Duration.between(now, booking.getShowing().getStartsAt()).toMinutes());
         int refundPercent = refundRules
                 .findFirstByPolicyIdAndMinimumMinutesBeforeLessThanEqualOrderByMinimumMinutesBeforeDesc(
                         booking.getShowing().getRefundPolicy().getId(), minutesBefore)
                 .map(rule -> rule.getRefundPercent()).orElse(0);
         long refundAmount = Math.multiplyExact(booking.getTotalCents(), refundPercent) / 100;
-        Payment payment = paymentRecords.findByBookingId(bookingId);
-        String refundReference = refundAmount == 0 ? null : payments.refund(payment.getProviderReference(),
-                refundAmount, "cancel:" + bookingId);
-
-        booking.cancel(now);
-        inventory.findByBookingIdOrderByIdAsc(bookingId).forEach(ShowSeat::release);
-        refunds.save(new Refund(UUID.randomUUID().toString(), booking, refundAmount,
-                refundPercent, refundReference, now));
-        if (refundAmount > 0) payment.markRefunded();
-        outbox.enqueue(bookingId, "BOOKING_CANCELLED",
-                Map.of("bookingId", bookingId, "email", customer.email(),
-                        "refundCents", refundAmount, "refundPercent", refundPercent),
-                "booking-cancelled:" + bookingId);
-        return new CancellationView(bookingId, "CANCELLED", refundAmount, refundPercent, "INR");
+        return new RefundQuote(refundAmount, refundPercent);
     }
 
-    @Transactional
-    public int releaseExpiredHolds() {
-        return releaseExpiredHolds(OffsetDateTime.now(clock));
+    private void processCancellation(Booking booking, RefundQuote quote, OffsetDateTime now) {
+        Payment payment = paymentRecords.findByBookingId(booking.getId());
+        String refundReference = quote.amount() == 0 ? null : payments.refund(payment.getProviderReference(),
+                quote.amount(), "cancel:" + booking.getId());
+        booking.cancel(now);
+        inventory.findByBookingIdOrderByIdAsc(booking.getId()).forEach(ShowSeat::release);
+        refunds.save(new Refund(UUID.randomUUID().toString(), booking, quote.amount(),
+                quote.percent(), refundReference, now));
+        if (quote.amount() > 0) payment.markRefunded();
+    }
+
+    private void enqueueCancellation(String bookingId, String email, RefundQuote quote) {
+        outbox.enqueue(bookingId, "BOOKING_CANCELLED",
+                Map.of("bookingId", bookingId, "email", email,
+                        "refundCents", quote.amount(), "refundPercent", quote.percent()),
+                "booking-cancelled:" + bookingId);
     }
 
     private DiscountCode lockAndValidateDiscount(String requestedCode, long subtotal, OffsetDateTime now) {
@@ -241,6 +315,14 @@ public class BookingService {
     private static List<String> labels(List<ShowSeat> seats) {
         return seats.stream().map(seat -> seat.getSeat().label()).toList();
     }
+
+    private record Price(long subtotal, long discountAmount, long total, DiscountCode discount) {
+        private String discountCode() {
+            return discount == null ? null : discount.getCode();
+        }
+    }
+
+    private record RefundQuote(long amount, int percent) { }
 
     public record HoldView(String holdId, long showingId, List<String> seatLabels,
                            long subtotalCents, OffsetDateTime expiresAt, String status) { }

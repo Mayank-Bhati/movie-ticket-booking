@@ -86,33 +86,42 @@ public class CatalogService {
     @Transactional(readOnly = true)
     public List<ShowingView> showings(Long cityId, Long movieId) {
         OffsetDateTime now = OffsetDateTime.now(clock);
-        List<Showing> matches;
-        if (cityId != null && movieId != null) {
-            matches = showings.findByStatusAndStartsAtAfterAndMovieIdAndScreenTheaterCityIdOrderByStartsAtAsc(
-                    "SCHEDULED", now, movieId, cityId);
-        } else if (cityId != null) {
-            matches = showings.findByStatusAndStartsAtAfterAndScreenTheaterCityIdOrderByStartsAtAsc(
-                    "SCHEDULED", now, cityId);
-        } else if (movieId != null) {
-            matches = showings.findByStatusAndStartsAtAfterAndMovieIdOrderByStartsAtAsc(
-                    "SCHEDULED", now, movieId);
-        } else {
-            matches = showings.findByStatusAndStartsAtAfterOrderByStartsAtAsc("SCHEDULED", now);
-        }
+        List<Showing> matches = findUpcomingShowings(cityId, movieId, now);
+        Map<Long, Long> minimumPrices = findMinimumPrices(matches);
+        return matches.stream().map(showing -> toShowingView(showing, minimumPrices)).toList();
+    }
 
+    private List<Showing> findUpcomingShowings(Long cityId, Long movieId, OffsetDateTime now) {
+        if (cityId != null && movieId != null) {
+            return showings.findByStatusAndStartsAtAfterAndMovieIdAndScreenTheaterCityIdOrderByStartsAtAsc(
+                    "SCHEDULED", now, movieId, cityId);
+        }
+        if (cityId != null) {
+            return showings.findByStatusAndStartsAtAfterAndScreenTheaterCityIdOrderByStartsAtAsc(
+                    "SCHEDULED", now, cityId);
+        }
+        if (movieId != null) {
+            return showings.findByStatusAndStartsAtAfterAndMovieIdOrderByStartsAtAsc(
+                    "SCHEDULED", now, movieId);
+        }
+        return showings.findByStatusAndStartsAtAfterOrderByStartsAtAsc("SCHEDULED", now);
+    }
+
+    private Map<Long, Long> findMinimumPrices(List<Showing> matches) {
         Set<Long> showingIds = matches.stream().map(Showing::getId).collect(Collectors.toSet());
-        Map<Long, Long> minimumPrices = showingIds.isEmpty() ? Map.of()
+        return showingIds.isEmpty() ? Map.of()
                 : showSeats.findByShowingIdIn(showingIds).stream().collect(Collectors.toMap(
                         seat -> seat.getShowing().getId(), ShowSeat::getPriceCents, Math::min));
-        return matches.stream().map(showing -> {
-            Movie movie = showing.getMovie();
-            Screen screen = showing.getScreen();
-            Theater theater = screen.getTheater();
-            City city = theater.getCity();
-            return new ShowingView(showing.getId(), movie.getId(), movie.getTitle(), city.getId(),
-                    city.getName(), theater.getName(), screen.getName(), showing.getStartsAt(),
-                    minimumPrices.get(showing.getId()));
-        }).toList();
+    }
+
+    private ShowingView toShowingView(Showing showing, Map<Long, Long> minimumPrices) {
+        Movie movie = showing.getMovie();
+        Screen screen = showing.getScreen();
+        Theater theater = screen.getTheater();
+        City city = theater.getCity();
+        return new ShowingView(showing.getId(), movie.getId(), movie.getTitle(), city.getId(),
+                city.getName(), theater.getName(), screen.getName(), showing.getStartsAt(),
+                minimumPrices.get(showing.getId()));
     }
 
     @Transactional(readOnly = true)
@@ -144,13 +153,23 @@ public class CatalogService {
     public ScreenCreated createScreen(long theaterId, String name, int rows, int seatsPerRow,
                                       Set<Integer> premiumRows) {
         Theater theater = require(theaters.findById(theaterId).orElse(null), "THEATER_NOT_FOUND");
+        validateScreenLayout(rows, premiumRows);
+        Screen screen = screens.save(new Screen(theater, name.trim()));
+        List<Seat> layout = buildSeatLayout(screen, rows, seatsPerRow, premiumRows);
+        seats.saveAll(layout);
+        return new ScreenCreated(screen.getId(), layout.size());
+    }
+
+    private void validateScreenLayout(int rows, Set<Integer> premiumRows) {
         if (rows > 26) {
             throw ApiException.badRequest("TOO_MANY_ROWS", "A screen supports at most 26 rows");
         }
         if (premiumRows.stream().anyMatch(row -> row < 1 || row > rows)) {
             throw ApiException.badRequest("INVALID_PREMIUM_ROW", "Premium rows must exist in the layout");
         }
-        Screen screen = screens.save(new Screen(theater, name.trim()));
+    }
+
+    private List<Seat> buildSeatLayout(Screen screen, int rows, int seatsPerRow, Set<Integer> premiumRows) {
         List<Seat> layout = new ArrayList<>(rows * seatsPerRow);
         for (int row = 1; row <= rows; row++) {
             String rowLabel = String.valueOf((char) ('A' + row - 1));
@@ -159,8 +178,7 @@ public class CatalogService {
                 layout.add(new Seat(screen, rowLabel, seatNumber, category));
             }
         }
-        seats.saveAll(layout);
-        return new ScreenCreated(screen.getId(), layout.size());
+        return layout;
     }
 
     @Transactional
@@ -177,14 +195,18 @@ public class CatalogService {
 
     @Transactional
     public long createRefundPolicy(String name, List<RefundRuleInput> rules) {
+        validateRefundRules(rules);
+        RefundPolicy policy = new RefundPolicy(name.trim());
+        rules.forEach(rule -> policy.addRule(rule.minimumMinutesBefore(), rule.refundPercent()));
+        return refundPolicies.save(policy).getId();
+    }
+
+    private void validateRefundRules(List<RefundRuleInput> rules) {
         Set<Long> thresholds = new HashSet<>();
         if (rules.isEmpty() || rules.stream().anyMatch(rule -> !thresholds.add(rule.minimumMinutesBefore()))) {
             throw ApiException.badRequest("INVALID_REFUND_RULES",
                     "Provide at least one rule with unique minute thresholds");
         }
-        RefundPolicy policy = new RefundPolicy(name.trim());
-        rules.forEach(rule -> policy.addRule(rule.minimumMinutesBefore(), rule.refundPercent()));
-        return refundPolicies.save(policy).getId();
     }
 
     @Transactional
@@ -194,44 +216,72 @@ public class CatalogService {
         Screen screen = require(screens.findById(screenId).orElse(null), "SCREEN_NOT_FOUND");
         RefundPolicy policy = require(refundPolicies.findById(refundPolicyId).orElse(null),
                 "REFUND_POLICY_NOT_FOUND");
+        validateShowingSchedule(screenId, startsAt, movie.getDurationMinutes());
+        Showing showing = saveShowing(movie, screen, policy, startsAt, basePriceCents, weekendMultiplierBps);
+        createShowInventory(showing, screen, basePriceCents, weekendMultiplierBps);
+        return showing.getId();
+    }
+
+    private void validateShowingSchedule(long screenId, Instant startsAt, int durationMinutes) {
         if (!startsAt.isAfter(clock.instant())) {
             throw ApiException.badRequest("SHOWING_IN_PAST", "A showing must start in the future");
         }
-        ensureScreenAvailable(screenId, startsAt, movie.getDurationMinutes());
-        Showing showing = showings.save(new Showing(movie, screen, policy,
-                OffsetDateTime.ofInstant(startsAt, ZoneOffset.UTC), basePriceCents, weekendMultiplierBps));
-        ZonedDateTime localStart = startsAt.atZone(ZoneId.of(screen.getTheater().getCity().getTimezone()));
-        boolean weekend = localStart.getDayOfWeek() == DayOfWeek.SATURDAY
-                || localStart.getDayOfWeek() == DayOfWeek.SUNDAY;
-        int weekendMultiplier = weekend ? weekendMultiplierBps : 10000;
+        ensureScreenAvailable(screenId, startsAt, durationMinutes);
+    }
 
-        List<Seat> layout = seats.findByScreenIdOrderByIdAsc(screenId);
+    private Showing saveShowing(Movie movie, Screen screen, RefundPolicy policy, Instant startsAt,
+                                 long basePriceCents, int weekendMultiplierBps) {
+        return showings.save(new Showing(movie, screen, policy,
+                OffsetDateTime.ofInstant(startsAt, ZoneOffset.UTC), basePriceCents, weekendMultiplierBps));
+    }
+
+    private void createShowInventory(Showing showing, Screen screen, long basePriceCents,
+                                     int weekendMultiplierBps) {
+        List<Seat> layout = seats.findByScreenIdOrderByIdAsc(screen.getId());
         if (layout.isEmpty()) {
             throw ApiException.badRequest("EMPTY_SCREEN", "Add seats before scheduling a showing");
         }
-        List<ShowSeat> inventory = layout.stream().map(seat -> {
-            PricingTier tier = pricingTiers.findById(seat.getCategory()).orElseThrow();
-            long tierPrice = Math.multiplyExact(basePriceCents, tier.getMultiplierBps()) / 10000;
-            return new ShowSeat(showing, seat,
-                    Math.multiplyExact(tierPrice, weekendMultiplier) / 10000);
-        }).toList();
+        int scheduleMultiplier = scheduleMultiplier(screen, showing.getStartsAt().toInstant(), weekendMultiplierBps);
+        Map<String, PricingTier> tiers = pricingTiers.findAll().stream()
+                .collect(Collectors.toMap(PricingTier::getCategory, tier -> tier));
+        List<ShowSeat> inventory = layout.stream()
+                .map(seat -> createShowSeat(showing, seat, basePriceCents, scheduleMultiplier, tiers))
+                .toList();
         showSeats.saveAll(inventory);
-        return showing.getId();
+    }
+
+    private int scheduleMultiplier(Screen screen, Instant startsAt, int weekendMultiplierBps) {
+        ZonedDateTime localStart = startsAt.atZone(ZoneId.of(screen.getTheater().getCity().getTimezone()));
+        boolean weekend = localStart.getDayOfWeek() == DayOfWeek.SATURDAY
+                || localStart.getDayOfWeek() == DayOfWeek.SUNDAY;
+        return weekend ? weekendMultiplierBps : 10000;
+    }
+
+    private ShowSeat createShowSeat(Showing showing, Seat seat, long basePriceCents,
+                                    int scheduleMultiplier, Map<String, PricingTier> tiers) {
+        PricingTier tier = require(tiers.get(seat.getCategory()), "PRICING_TIER_NOT_FOUND");
+        long tierPrice = Math.multiplyExact(basePriceCents, tier.getMultiplierBps()) / 10000;
+        return new ShowSeat(showing, seat, Math.multiplyExact(tierPrice, scheduleMultiplier) / 10000);
     }
 
     @Transactional
     public void createDiscount(String code, String kind, long valueAmount, long minimumOrderCents,
                                Instant validFrom, Instant validUntil, Integer maxRedemptions) {
-        String normalizedKind = kind.toUpperCase();
-        if (!Set.of("PERCENT", "FIXED").contains(normalizedKind)) {
-            throw ApiException.badRequest("INVALID_DISCOUNT_KIND", "Kind must be PERCENT or FIXED");
-        }
-        if (normalizedKind.equals("PERCENT") && valueAmount > 100) {
-            throw ApiException.badRequest("INVALID_PERCENT", "Percentage discount cannot exceed 100");
-        }
+        String normalizedKind = validateDiscountKind(kind, valueAmount);
         discounts.save(new DiscountCode(code.toUpperCase(), normalizedKind, valueAmount,
                 minimumOrderCents, OffsetDateTime.ofInstant(validFrom, ZoneOffset.UTC),
                 OffsetDateTime.ofInstant(validUntil, ZoneOffset.UTC), maxRedemptions));
+    }
+
+    private String validateDiscountKind(String kind, long valueAmount) {
+        String normalized = kind.toUpperCase();
+        if (!Set.of("PERCENT", "FIXED").contains(normalized)) {
+            throw ApiException.badRequest("INVALID_DISCOUNT_KIND", "Kind must be PERCENT or FIXED");
+        }
+        if (normalized.equals("PERCENT") && valueAmount > 100) {
+            throw ApiException.badRequest("INVALID_PERCENT", "Percentage discount cannot exceed 100");
+        }
+        return normalized;
     }
 
     private void ensureScreenAvailable(long screenId, Instant startsAt, int durationMinutes) {
